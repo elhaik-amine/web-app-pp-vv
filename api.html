@@ -1,0 +1,4644 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Khidmati Backend API Documentation</title>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --panel-alt: #f9fbff;
+        --text: #18212f;
+        --muted: #5d6b82;
+        --border: #dbe3ef;
+        --accent: #0f62fe;
+        --accent-soft: #e8f0ff;
+        --success: #137333;
+        --success-soft: #e8f5ec;
+        --warning: #b06000;
+        --warning-soft: #fff4e5;
+        --danger: #c5221f;
+        --danger-soft: #fdecec;
+        --shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+        --mono:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+          monospace;
+        --sans: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        font-family: var(--sans);
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, #dce8ff 0, transparent 24rem),
+          linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+        line-height: 1.55;
+      }
+      .page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 32px 20px 80px;
+      }
+      .hero {
+        background: linear-gradient(135deg, #0b1f3a 0%, #154ea8 100%);
+        color: #fff;
+        border-radius: 24px;
+        padding: 32px;
+        box-shadow: var(--shadow);
+        margin-bottom: 24px;
+      }
+      .hero h1 {
+        margin: 0 0 10px;
+        font-size: 2.2rem;
+        line-height: 1.15;
+      }
+      .hero p {
+        max-width: 980px;
+        margin: 0;
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .hero-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 14px;
+        margin-top: 24px;
+      }
+      .hero-card {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 16px;
+        padding: 14px 16px;
+        backdrop-filter: blur(6px);
+      }
+      .hero-card strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgba(255, 255, 255, 0.8);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }
+      .sidebar {
+        position: sticky;
+        top: 20px;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+      .sidebar h2 {
+        margin: 0 0 12px;
+        font-size: 1rem;
+      }
+      .sidebar a {
+        display: block;
+        padding: 8px 10px;
+        margin: 2px 0;
+        color: var(--text);
+        text-decoration: none;
+        border-radius: 10px;
+        font-size: 0.95rem;
+      }
+      .sidebar a:hover {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .content section {
+        margin-bottom: 24px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        padding: 24px;
+      }
+      .section-title {
+        margin: 0 0 8px;
+        font-size: 1.6rem;
+      }
+      .section-summary {
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--panel-alt);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 16px;
+      }
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+      }
+      .card p,
+      .card li {
+        color: var(--muted);
+      }
+      .card ul {
+        margin: 10px 0 0 20px;
+        padding: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0;
+        font-size: 0.94rem;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f3f7fd;
+        font-weight: 700;
+      }
+      .endpoint {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        overflow: hidden;
+        background: #fff;
+        margin-bottom: 18px;
+      }
+      .endpoint summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .endpoint summary::-webkit-details-marker {
+        display: none;
+      }
+      .endpoint-body {
+        padding: 20px;
+      }
+      .method {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 74px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        color: #fff;
+      }
+      .get {
+        background: #1a73e8;
+      }
+      .post {
+        background: #137333;
+      }
+      .put {
+        background: #8e24aa;
+      }
+      .patch {
+        background: #ef6c00;
+      }
+      .delete {
+        background: #c5221f;
+      }
+      .path {
+        font-family: var(--mono);
+        font-size: 1rem;
+        font-weight: 700;
+      }
+      .subtle {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        margin-right: 6px;
+        border: 1px solid transparent;
+      }
+      .badge-auth {
+        background: #eef4ff;
+        color: #185abc;
+        border-color: #d6e3ff;
+      }
+      .badge-public {
+        background: #edf7ed;
+        color: #137333;
+        border-color: #d2ebd3;
+      }
+      .badge-admin {
+        background: #fff4e5;
+        color: #b06000;
+        border-color: #fde2bc;
+      }
+      .badge-warning {
+        background: #fff4e5;
+        color: #915300;
+        border-color: #f4d7a7;
+      }
+      .badge-danger {
+        background: #fdecec;
+        color: var(--danger);
+        border-color: #f4c7c7;
+      }
+      pre {
+        margin: 12px 0;
+        background: #0f1726;
+        color: #e8eefc;
+        border-radius: 14px;
+        padding: 16px;
+        overflow-x: auto;
+        font-size: 0.88rem;
+        line-height: 1.5;
+        font-family: var(--mono);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+      }
+      code,
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.95em;
+      }
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: #f6f9ff;
+        padding: 14px 16px;
+        border-radius: 0 14px 14px 0;
+        margin: 14px 0;
+      }
+      .callout.warn {
+        border-left-color: var(--warning);
+        background: #fff8ee;
+      }
+      .callout.danger {
+        border-left-color: var(--danger);
+        background: #fff5f5;
+      }
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .status-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+        background: #fff;
+      }
+      .status-card strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 0.95rem;
+      }
+      .small {
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+      .footer {
+        text-align: center;
+        color: var(--muted);
+        margin-top: 28px;
+        font-size: 0.9rem;
+      }
+      @media (max-width: 1080px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          position: static;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <h1>Khidmati Backend API Documentation</h1>
+        <p>
+          Internal API reference generated from the repository source code. This
+          document is based on mounted Express routes, controllers, middleware,
+          SQL schema, and Jest tests inside the backend project. Where behavior
+          is not explicit in code, it is marked as inferred from code structure.
+        </p>
+        <div class="hero-grid">
+          <div class="hero-card">
+            <strong>Project</strong>
+            Khidmati Backend
+          </div>
+          <div class="hero-card">
+            <strong>Base URL</strong>
+            Inferred: <span class="mono">http://localhost:5000/api</span>
+          </div>
+          <div class="hero-card">
+            <strong>Auth</strong>
+            JWT Bearer access token, 7-day expiry
+          </div>
+          <div class="hero-card">
+            <strong>Stack</strong>
+            Node.js, Express, MySQL, Socket.IO, Nodemailer, Jest
+          </div>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <h2>Navigation</h2>
+          <a href="#summary">Project Summary</a>
+          <a href="#authentication">Authentication</a>
+          <a href="#models">Data Models</a>
+          <a href="#responses">Common Responses</a>
+          <a href="#auth-endpoints">Auth Endpoints</a>
+          <a href="#user-endpoints">User Endpoints</a>
+          <a href="#provider-endpoints">Provider Endpoints</a>
+          <a href="#category-endpoints">Category Endpoints</a>
+          <a href="#booking-endpoints">Booking Endpoints</a>
+          <a href="#token-endpoints">Token Endpoints</a>
+          <a href="#report-endpoints">Report Endpoints</a>
+          <a href="#notification-endpoints">Notification Endpoints</a>
+          <a href="#admin-endpoints">Admin Endpoints</a>
+          <a href="#inactive-endpoints">Defined But Not Mounted</a>
+        </aside>
+
+        <main class="content">
+          <section id="summary" class="panel">
+            <h2 class="section-title">Project Summary</h2>
+            <p class="section-summary">
+              The backend is a REST API for a home-services marketplace. Clients
+              register, browse providers, create bookings, chat around bookings,
+              report users, manage notifications, and buy platform tokens.
+              Providers manage bookings and service flow. Admins moderate users,
+              reports, bookings, and token activity.
+            </p>
+            <div class="grid-2">
+              <div class="card">
+                <h3>Detected Runtime</h3>
+                <table>
+                  <tr>
+                    <th>Item</th>
+                    <th>Value</th>
+                  </tr>
+                  <tr>
+                    <td>Entry point</td>
+                    <td><span class="mono">backend/src/server.js</span></td>
+                  </tr>
+                  <tr>
+                    <td>Express app mounts</td>
+                    <td>
+                      <span class="mono">/api/auth</span>,
+                      <span class="mono">/api/auth/client</span>,
+                      <span class="mono">/api/auth/provider</span>,
+                      <span class="mono">/api/users</span>,
+                      <span class="mono">/api/providers</span>,
+                      <span class="mono">/api/bookings</span>,
+                      <span class="mono">/api/tokens</span>,
+                      <span class="mono">/api/reports</span>,
+                      <span class="mono">/api/notifications</span>,
+                      <span class="mono">/api/admin</span>,
+                      <span class="mono">/api/categories</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Default port</td>
+                    <td>
+                      <span class="mono">5000</span> unless
+                      <span class="mono">PORT</span> overrides it
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>CORS</td>
+                    <td>Enabled globally with unrestricted origin</td>
+                  </tr>
+                  <tr>
+                    <td>Body parsing</td>
+                    <td>
+                      <span class="mono">express.json()</span> and URL-encoded
+                      parser enabled
+                    </td>
+                  </tr>
+                </table>
+              </div>
+              <div class="card">
+                <h3>Environment and Headers</h3>
+                <table>
+                  <tr>
+                    <th>Variable / Header</th>
+                    <th>Purpose</th>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="mono">DB_HOST</span>,
+                      <span class="mono">DB_PORT</span>,
+                      <span class="mono">DB_NAME</span>,
+                      <span class="mono">DB_USER</span>,
+                      <span class="mono">DB_PASS</span>
+                    </td>
+                    <td>MySQL connection pool</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">JWT_SECRET</span></td>
+                    <td>
+                      Signs and verifies login tokens and password-reset JWTs
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">FRONTEND_URL</span></td>
+                    <td>Builds password reset link sent by email</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="mono">EMAIL_HOST</span>,
+                      <span class="mono">EMAIL_PORT</span>,
+                      <span class="mono">EMAIL_USER</span>,
+                      <span class="mono">EMAIL_PASS</span>
+                    </td>
+                    <td>SMTP transport for password reset email</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                    <td>Required for protected endpoints</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                    <td>Expected for POST, PUT, PATCH JSON bodies</td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+            <div class="callout warn">
+              Suspended users are blocked only on routes that include the
+              <span class="mono">restricted</span> middleware. Admin routes and
+              notification routes do not use that middleware.
+            </div>
+            <div class="callout danger">
+              No rate limiting, input schema library, file upload middleware, or
+              OpenAPI spec was found in the mounted backend. Validation is
+              implemented manually inside controllers.
+            </div>
+          </section>
+
+          <section id="authentication" class="panel">
+            <h2 class="section-title">Authentication</h2>
+            <p class="section-summary">
+              The API uses JWT bearer tokens. Client and provider login
+              endpoints return an access token signed with
+              <span class="mono">JWT_SECRET</span> and expiring in 7 days. The
+              <span class="mono">protect</span> middleware verifies the token,
+              loads the user from the database, and attaches
+              <span class="mono">req.user</span>.
+            </p>
+            <div class="grid-2">
+              <div class="card">
+                <h3>Access Token Rules</h3>
+                <ul>
+                  <li>
+                    Header format:
+                    <span class="mono"
+                      >Authorization: Bearer &lt;token&gt;</span
+                    >
+                  </li>
+                  <li>
+                    401 if header is missing, malformed, token invalid, or user
+                    no longer exists
+                  </li>
+                  <li>403 if role middleware rejects the current user</li>
+                  <li>
+                    403 if suspended user hits a route that also uses
+                    <span class="mono">restricted</span>
+                  </li>
+                </ul>
+              </div>
+              <div class="card">
+                <h3>Password Reset Flow</h3>
+                <ul>
+                  <li>
+                    <span class="mono">POST /api/auth/forgot-password</span>
+                    stores a 1-hour JWT in the user record
+                  </li>
+                  <li>
+                    Email links to
+                    <span class="mono"
+                      >{FRONTEND_URL}/reset-password?token=...</span
+                    >
+                  </li>
+                  <li>
+                    <span class="mono">POST /api/auth/reset-password</span>
+                    validates both JWT signature and stored token match
+                  </li>
+                  <li>
+                    Reset token is cleared after successful password reset
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <pre>
+{
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}</pre
+            >
+          </section>
+
+          <section id="models" class="panel">
+            <h2 class="section-title">Data Models / Schemas</h2>
+            <p class="section-summary">
+              The following models are inferred from
+              <span class="mono">init.sql</span> and controller queries.
+            </p>
+            <div class="grid-2">
+              <div class="card">
+                <h3>users</h3>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Notes</th>
+                  </tr>
+                  <tr>
+                    <td>id</td>
+                    <td>int</td>
+                    <td>Primary key</td>
+                  </tr>
+                  <tr>
+                    <td>name</td>
+                    <td>varchar(255)</td>
+                    <td>Required</td>
+                  </tr>
+                  <tr>
+                    <td>email</td>
+                    <td>varchar(255)</td>
+                    <td>Required, unique</td>
+                  </tr>
+                  <tr>
+                    <td>password</td>
+                    <td>varchar(255)</td>
+                    <td>Hashed with bcrypt</td>
+                  </tr>
+                  <tr>
+                    <td>phone</td>
+                    <td>varchar(20)</td>
+                    <td>Optional</td>
+                  </tr>
+                  <tr>
+                    <td>role</td>
+                    <td>enum</td>
+                    <td>
+                      <span class="mono">CLIENT</span>,
+                      <span class="mono">PROVIDER</span>,
+                      <span class="mono">ADMIN</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>avatar</td>
+                    <td>varchar(255)</td>
+                    <td>Optional, required for provider registration</td>
+                  </tr>
+                  <tr>
+                    <td>status</td>
+                    <td>enum</td>
+                    <td>
+                      <span class="mono">ACTIVE</span>,
+                      <span class="mono">WARNED</span>,
+                      <span class="mono">RESTRICTED</span>,
+                      <span class="mono">SUSPENDED</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>token_balance</td>
+                    <td>decimal(10,2)</td>
+                    <td>Wallet balance</td>
+                  </tr>
+                </table>
+              </div>
+              <div class="card">
+                <h3>provider_profiles</h3>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Notes</th>
+                  </tr>
+                  <tr>
+                    <td>user_id</td>
+                    <td>int</td>
+                    <td>Unique FK to users</td>
+                  </tr>
+                  <tr>
+                    <td>category_id</td>
+                    <td>int</td>
+                    <td>Nullable FK to service_categories</td>
+                  </tr>
+                  <tr>
+                    <td>description</td>
+                    <td>text</td>
+                    <td>Provider bio / service description</td>
+                  </tr>
+                  <tr>
+                    <td>city</td>
+                    <td>varchar(255)</td>
+                    <td>Required at provider registration</td>
+                  </tr>
+                  <tr>
+                    <td>is_active</td>
+                    <td>tinyint(1)</td>
+                    <td>Provider visibility toggle</td>
+                  </tr>
+                  <tr>
+                    <td>is_verified</td>
+                    <td>tinyint(1)</td>
+                    <td>Verification flag</td>
+                  </tr>
+                  <tr>
+                    <td>rating</td>
+                    <td>decimal(3,2)</td>
+                    <td>Derived from reviews</td>
+                  </tr>
+                  <tr>
+                    <td>total_reviews</td>
+                    <td>int</td>
+                    <td>Derived from reviews</td>
+                  </tr>
+                </table>
+              </div>
+              <div class="card">
+                <h3>bookings</h3>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Notes</th>
+                  </tr>
+                  <tr>
+                    <td>client_id</td>
+                    <td>int</td>
+                    <td>FK to users</td>
+                  </tr>
+                  <tr>
+                    <td>provider_id</td>
+                    <td>int</td>
+                    <td>FK to users</td>
+                  </tr>
+                  <tr>
+                    <td>booking_date</td>
+                    <td>date</td>
+                    <td>Required</td>
+                  </tr>
+                  <tr>
+                    <td>time_slot</td>
+                    <td>enum</td>
+                    <td>
+                      <span class="mono">08:00-12:00</span>,
+                      <span class="mono">12:00-15:00</span>,
+                      <span class="mono">15:00-18:00</span>,
+                      <span class="mono">18:00-21:00</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>status</td>
+                    <td>enum</td>
+                    <td>
+                      <span class="mono">PENDING</span>,
+                      <span class="mono">CONFIRMED</span>,
+                      <span class="mono">IN_PROGRESS</span>,
+                      <span class="mono">COMPLETED</span>,
+                      <span class="mono">CANCELLED</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>agreed_price</td>
+                    <td>decimal(10,2)</td>
+                    <td>Set after chat negotiation</td>
+                  </tr>
+                  <tr>
+                    <td>qr_code</td>
+                    <td>varchar(64)</td>
+                    <td>Generated when booking is confirmed</td>
+                  </tr>
+                </table>
+              </div>
+              <div class="card">
+                <h3>Other Tables</h3>
+                <table>
+                  <tr>
+                    <th>Table</th>
+                    <th>Important fields</th>
+                  </tr>
+                  <tr>
+                    <td>reviews</td>
+                    <td>
+                      <span class="mono">booking_id</span> unique,
+                      <span class="mono">rating</span> 1-5,
+                      <span class="mono">comment</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>reports</td>
+                    <td>
+                      <span class="mono">type</span> =
+                      <span class="mono">NOSHOW</span> |
+                      <span class="mono">ABSENT</span> |
+                      <span class="mono">OTHER</span>,
+                      <span class="mono">status</span> =
+                      <span class="mono">PENDING</span> |
+                      <span class="mono">REVIEWED</span> |
+                      <span class="mono">RESOLVED</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>notifications</td>
+                    <td>
+                      <span class="mono">type</span>,
+                      <span class="mono">title</span>,
+                      <span class="mono">message</span>,
+                      <span class="mono">data</span>,
+                      <span class="mono">is_read</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>messages</td>
+                    <td>
+                      <span class="mono">booking_id</span>,
+                      <span class="mono">sender_id</span>,
+                      <span class="mono">content</span>,
+                      <span class="mono">is_read</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>token_transactions</td>
+                    <td>
+                      <span class="mono">type</span> =
+                      <span class="mono">PURCHASE</span> |
+                      <span class="mono">DEDUCTION</span> |
+                      <span class="mono">REWARD</span>,
+                      <span class="mono">amount</span>,
+                      <span class="mono">booking_id</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>service_categories</td>
+                    <td>
+                      <span class="mono">name</span>,
+                      <span class="mono">description</span>,
+                      <span class="mono">icon</span>,
+                      <span class="mono">is_active</span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="responses" class="panel">
+            <h2 class="section-title">Common Response Patterns</h2>
+            <p class="section-summary">
+              Most controller responses use a JSON envelope with
+              <span class="mono">success</span>, <span class="mono">data</span>,
+              and sometimes <span class="mono">message</span>. Error handling is
+              not fully uniform across explicit controller responses and
+              fallback middleware.
+            </p>
+            <div class="status-grid">
+              <div class="status-card">
+                <strong>200 / 201 Success</strong>
+                <div class="small">
+                  Usually
+                  <span class="mono">{ success: true, data, message? }</span>
+                </div>
+              </div>
+              <div class="status-card">
+                <strong>400 Bad Request</strong>
+                <div class="small">
+                  Manual validation failures, invalid state transitions, bad
+                  input
+                </div>
+              </div>
+              <div class="status-card">
+                <strong>401 Unauthorized</strong>
+                <div class="small">Missing/invalid token or deleted user</div>
+              </div>
+              <div class="status-card">
+                <strong>403 Forbidden</strong>
+                <div class="small">
+                  Role restriction, suspended account, or ownership/access
+                  failure
+                </div>
+              </div>
+              <div class="status-card">
+                <strong>404 Not Found</strong>
+                <div class="small">
+                  Missing resource; unmatched routes use fallback middleware
+                  shape
+                </div>
+              </div>
+              <div class="status-card">
+                <strong>409 Conflict</strong>
+                <div class="small">
+                  Duplicate booking slot or duplicate review, inferred from DB
+                  unique constraints
+                </div>
+              </div>
+              <div class="status-card">
+                <strong>422 Validation Error</strong>
+                <div class="small">Not used by mounted code</div>
+              </div>
+              <div class="status-card">
+                <strong>500 Internal Server Error</strong>
+                <div class="small">
+                  Usually
+                  <span class="mono"
+                    >{ success: false, message: error.message }</span
+                  >
+                </div>
+              </div>
+            </div>
+            <pre>
+{
+  "success": true,
+  "data": { "id": 1 },
+  "message": "OK"
+}</pre
+            >
+            <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+            >
+            <pre>
+{
+  "message": "Not Found - /api/unknown-route",
+  "stack": "Error: Not Found - /api/unknown-route ..."
+}</pre
+            >
+          </section>
+
+          <section id="auth-endpoints" class="panel">
+            <h2 class="section-title">Auth Endpoints</h2>
+            <p class="section-summary">
+              Public authentication and recovery routes mounted under
+              <span class="mono">/api/auth</span>,
+              <span class="mono">/api/auth/client</span>, and
+              <span class="mono">/api/auth/provider</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/auth/client/register</span
+                ><span class="subtle">Register a client account</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>Creates a
+                  <span class="mono">CLIENT</span> user, hashes the password,
+                  and returns the created user plus a JWT access token.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>name</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Client full name</td>
+                  </tr>
+                  <tr>
+                    <td>email</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Must be unique in <span class="mono">users</span></td>
+                  </tr>
+                  <tr>
+                    <td>password</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Hashed with bcrypt before storage</td>
+                  </tr>
+                  <tr>
+                    <td>phone</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional phone number; stored as null if omitted</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "name": "Ali",
+  "email": "ali@test.com",
+  "password": "password123",
+  "phone": "0600000000"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "Ali",
+      "email": "ali@test.com",
+      "phone": "0600000000",
+      "role": "CLIENT",
+      "avatar": null,
+      "status": "ACTIVE",
+      "token_balance": 0,
+      "created_at": "2026-04-12T12:00:00.000Z"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  },
+  "message": "Registration successful"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "name, email and password are required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Email already in use"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>201</strong>. Tests confirm no refresh
+                  token is returned.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/auth/client/login</span
+                ><span class="subtle">Login as client</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>Authenticates a
+                  <span class="mono">CLIENT</span> user and returns a JWT access
+                  token plus a safe user object with sensitive fields removed.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>email</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Client email</td>
+                  </tr>
+                  <tr>
+                    <td>password</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Plaintext password to compare with bcrypt hash</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "email": "ali@test.com",
+  "password": "password123"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "Ali",
+      "email": "ali@test.com",
+      "role": "CLIENT",
+      "status": "ACTIVE",
+      "token_balance": 0
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  },
+  "message": "Login successful"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Invalid credentials"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Only users with role
+                  <span class="mono">CLIENT</span> can log in here.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/auth/provider/register</span
+                ><span class="subtle"
+                  >Register a provider account and profile</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>Creates a
+                  <span class="mono">PROVIDER</span> row in
+                  <span class="mono">users</span>, then creates a related
+                  <span class="mono">provider_profiles</span> row.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>name</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Provider display name</td>
+                  </tr>
+                  <tr>
+                    <td>email</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Unique account email</td>
+                  </tr>
+                  <tr>
+                    <td>password</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Hashed with bcrypt</td>
+                  </tr>
+                  <tr>
+                    <td>phone</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional phone number</td>
+                  </tr>
+                  <tr>
+                    <td>avatar</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Avatar image URL</td>
+                  </tr>
+                  <tr>
+                    <td>description</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Provider profile description</td>
+                  </tr>
+                  <tr>
+                    <td>city</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Provider city</td>
+                  </tr>
+                  <tr>
+                    <td>category_id</td>
+                    <td>number</td>
+                    <td>No</td>
+                    <td>Optional service category ID</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "name": "Ahmed",
+  "email": "ahmed@test.com",
+  "password": "password123",
+  "phone": "0611111111",
+  "avatar": "https://cdn.example.com/avatar.jpg",
+  "description": "Expert plumber with 5 years experience",
+  "city": "Casablanca",
+  "category_id": 1
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 2,
+      "name": "Ahmed",
+      "email": "ahmed@test.com",
+      "phone": "0611111111",
+      "role": "PROVIDER",
+      "avatar": "https://cdn.example.com/avatar.jpg",
+      "status": "ACTIVE",
+      "token_balance": 0,
+      "description": "Expert plumber with 5 years experience",
+      "city": "Casablanca",
+      "rating": 0,
+      "is_verified": 0
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  },
+  "message": "Provider registration successful"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Avatar image URL is required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Email already in use"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>201</strong>. The code does not wrap
+                  the two inserts in an explicit transaction.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/auth/provider/login</span
+                ><span class="subtle">Login as provider</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>Authenticates a
+                  provider by joining <span class="mono">users</span> and
+                  <span class="mono">provider_profiles</span>, then returns the
+                  profile and a JWT access token.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>email</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Provider email</td>
+                  </tr>
+                  <tr>
+                    <td>password</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Password for bcrypt comparison</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "email": "ahmed@test.com",
+  "password": "password123"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 2,
+      "name": "Ahmed",
+      "email": "ahmed@test.com",
+      "role": "PROVIDER",
+      "description": "Expert plumber",
+      "city": "Casablanca",
+      "rating": 4.5,
+      "is_verified": 1
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  },
+  "message": "Login successful"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Invalid credentials"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Only users with role
+                  <span class="mono">PROVIDER</span> can use this route.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/auth/logout</span
+                ><span class="subtle">Stateless logout</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>No token
+                  blacklist is implemented. Clients are expected to discard
+                  their local token.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>None required</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None required</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": null,
+  "message": "Logged out successfully"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Unexpected server error"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Tests show this route
+                  always succeeds.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/auth/forgot-password</span
+                ><span class="subtle">Request a password reset email</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>Generates a
+                  1-hour reset JWT, stores it, and emails a frontend reset URL.
+                  If the email does not exist, the API still returns success to
+                  avoid account enumeration.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body field</th>
+                    <td><span class="mono">email</span> (string, required)</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "email": "ali@test.com"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": null,
+  "message": "If that email exists, a reset link was sent"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Email is required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "SMTP or database error message"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Reset URL is built from
+                  <span class="mono">FRONTEND_URL</span>.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/auth/reset-password</span
+                ><span class="subtle"
+                  >Reset password using email link token</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>Validates the
+                  JWT and confirms the same token is still stored for the user
+                  before updating the password.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>token</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Password reset JWT from email link</td>
+                  </tr>
+                  <tr>
+                    <td>password</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>New plaintext password to hash and save</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "password": "newpass456"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": null,
+  "message": "Password reset successful"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Token and new password are required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Invalid or expired reset token"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Reusing a previously
+                  cleared token returns the same invalid/expired response.
+                </p>
+              </div>
+            </details>
+          </section>
+
+          <section id="user-endpoints" class="panel">
+            <h2 class="section-title">User Endpoints</h2>
+            <p class="section-summary">
+              Profile management and public-by-ID lookup mounted under
+              <span class="mono">/api/users</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/users/me</span
+                ><span class="subtle"
+                  >Get current authenticated user profile</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns the authenticated user's safe profile fields.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Ali",
+    "email": "ali@test.com",
+    "phone": "0600000000",
+    "role": "CLIENT",
+    "avatar": null,
+    "status": "ACTIVE",
+    "token_balance": 5,
+    "created_at": "2026-04-12T12:00:00.000Z"
+  },
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+                <p class="small">
+                  Possible 404 if the authenticated user no longer exists in the
+                  database.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method put">PUT</span
+                ><span class="path">/api/users/me</span
+                ><span class="subtle">Update current user profile</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Updates selected user fields. Only submitted fields are
+                  updated; password is re-hashed.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>name</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>New display name</td>
+                  </tr>
+                  <tr>
+                    <td>phone</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>New phone number</td>
+                  </tr>
+                  <tr>
+                    <td>password</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>New plaintext password to bcrypt-hash</td>
+                  </tr>
+                  <tr>
+                    <td>avatar</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>New avatar URL</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "name": "Ali Updated",
+  "phone": "0612345678"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Ali Updated",
+    "email": "ali@test.com",
+    "phone": "0612345678",
+    "role": "CLIENT",
+    "avatar": null,
+    "status": "ACTIVE",
+    "token_balance": 5
+  },
+  "message": "Profile updated"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "No fields to update"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method delete">DELETE</span
+                ><span class="path">/api/users/me</span
+                ><span class="subtle">Delete current account</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Deletes the current user row. SQL schema may cascade to
+                  related tables depending on foreign key definitions.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": null,
+  "message": "Account deleted"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/users/:id</span
+                ><span class="subtle"
+                  >Get any user by ID, including provider profile fields when
+                  present</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span>Returns a
+                  user profile and left-joins provider profile data if the
+                  target user is a provider.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">id</span> (number, required) - user ID
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "name": "Ahmed",
+    "email": "ahmed@test.com",
+    "phone": "0611111111",
+    "role": "PROVIDER",
+    "avatar": "https://cdn.example.com/avatar.jpg",
+    "status": "ACTIVE",
+    "created_at": "2026-04-12T12:00:00.000Z",
+    "description": "Expert plumber",
+    "city": "Casablanca",
+    "rating": 4.5,
+    "total_reviews": 12,
+    "is_verified": 1
+  },
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "User not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+              </div>
+            </details>
+          </section>
+
+          <section id="provider-endpoints" class="panel">
+            <h2 class="section-title">Provider Endpoints</h2>
+            <p class="section-summary">
+              Browsable provider discovery endpoints mounted under
+              <span class="mono">/api/providers</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/providers</span
+                ><span class="subtle">List active providers</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Lists active provider profiles sorted by rating and review
+                  count.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Query param</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>city</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>
+                      Exact match on
+                      <span class="mono">provider_profiles.city</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>category_id</td>
+                    <td>number</td>
+                    <td>No</td>
+                    <td>Exact match on provider category</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 2,
+      "name": "Ahmed",
+      "avatar": "https://cdn.example.com/avatar.jpg",
+      "description": "Expert plumber",
+      "city": "Casablanca",
+      "rating": 4.5,
+      "total_reviews": 12,
+      "is_verified": 1,
+      "category_id": 1,
+      "category_name": "Plumbing"
+    }
+  ]
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Empty result returns
+                  <span class="mono">[]</span>, not 404.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/providers/:id</span
+                ><span class="subtle">Get provider detail</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns a single provider profile, including phone number.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">id</span> (number, required) - provider
+                      user ID
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "name": "Ahmed",
+    "avatar": "https://cdn.example.com/avatar.jpg",
+    "phone": "0611111111",
+    "description": "Expert plumber",
+    "city": "Casablanca",
+    "rating": 4.5,
+    "total_reviews": 12,
+    "is_verified": 1,
+    "category_id": 1,
+    "category_name": "Plumbing"
+  }
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Provider not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+              </div>
+            </details>
+          </section>
+
+          <section id="category-endpoints" class="panel">
+            <h2 class="section-title">Category Endpoints</h2>
+            <p class="section-summary">
+              Category management and listing mounted under
+              <span class="mono">/api/categories</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/categories</span
+                ><span class="subtle">List active categories</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-public">Public</span>Returns
+                  categories where <span class="mono">is_active = 1</span>,
+                  ordered by name.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>None required</td>
+                  </tr>
+                  <tr>
+                    <th>Params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Plumbing",
+      "description": "Pipes, leaks, installations",
+      "icon": "wrench",
+      "is_active": 1,
+      "created_at": "2026-04-12T12:00:00.000Z",
+      "updated_at": "2026-04-12T12:00:00.000Z"
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Database error message"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/categories</span
+                ><span class="subtle">Create category</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Creates a
+                  new service category.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>name</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Category label</td>
+                  </tr>
+                  <tr>
+                    <td>description</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional category description</td>
+                  </tr>
+                  <tr>
+                    <td>icon</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional icon identifier or URL</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "name": "Plumbing",
+  "description": "Pipes, leaks, and repairs",
+  "icon": "wrench"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Plumbing",
+    "description": "Pipes, leaks, and repairs",
+    "icon": "wrench",
+    "is_active": 1
+  },
+  "message": "Category created"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "name is required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+                <p class="small">Success status: <strong>201</strong>.</p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method put">PUT</span
+                ><span class="path">/api/categories/:id</span
+                ><span class="subtle">Update category</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Replaces
+                  category fields with the submitted payload. The controller
+                  does not validate that <span class="mono">name</span> is
+                  present here.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>name</td>
+                    <td>string</td>
+                    <td>Inferred yes</td>
+                    <td>Category name to store</td>
+                  </tr>
+                  <tr>
+                    <td>description</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional description, null if omitted</td>
+                  </tr>
+                  <tr>
+                    <td>icon</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional icon, null if omitted</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "name": "Electrical",
+  "description": "Wiring and maintenance",
+  "icon": "bolt"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Electrical",
+    "description": "Wiring and maintenance",
+    "icon": "bolt",
+    "is_active": 1
+  },
+  "message": "Category updated"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Category not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/categories/:id/toggle</span
+                ><span class="subtle">Activate or deactivate category</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Flips
+                  <span class="mono">is_active</span> between 1 and 0.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": { "id": 1, "is_active": 0 },
+  "message": "Category deactivated"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Category not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+              </div>
+            </details>
+          </section>
+
+          <section id="booking-endpoints" class="panel">
+            <h2 class="section-title">Booking and Message Endpoints</h2>
+            <p class="section-summary">
+              Booking lifecycle, chat, QR flow, and reviews mounted under
+              <span class="mono">/api/bookings</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/bookings/slots</span
+                ><span class="subtle"
+                  >Get available slots for a provider on a date</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns the four fixed slots split into
+                  <span class="mono">available</span> and
+                  <span class="mono">taken</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Query param</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>provider_id</td>
+                    <td>number</td>
+                    <td>Yes</td>
+                    <td>Provider user ID</td>
+                  </tr>
+                  <tr>
+                    <td>date</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Booking date, expected DB-compatible date string</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "date": "2026-06-01",
+    "available": ["15:00-18:00", "18:00-21:00"],
+    "taken": ["08:00-12:00", "12:00-15:00"]
+  }
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "provider_id and date are required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/bookings</span
+                ><span class="subtle">Create booking request</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Client-only endpoint that creates a booking in
+                  <span class="mono">PENDING</span> state and notifies the
+                  provider.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Auth rules</th>
+                    <td>Requires role <span class="mono">CLIENT</span></td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Allowed values / rules</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>provider_id</td>
+                    <td>number</td>
+                    <td>Yes</td>
+                    <td>Must identify an active provider profile</td>
+                    <td>Provider being booked</td>
+                  </tr>
+                  <tr>
+                    <td>booking_date</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Expected date string</td>
+                    <td>Date of service</td>
+                  </tr>
+                  <tr>
+                    <td>time_slot</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>
+                      <span class="mono">08:00-12:00</span>,
+                      <span class="mono">12:00-15:00</span>,
+                      <span class="mono">15:00-18:00</span>,
+                      <span class="mono">18:00-21:00</span>
+                    </td>
+                    <td>Requested time slot</td>
+                  </tr>
+                  <tr>
+                    <td>notes</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional</td>
+                    <td>Additional booking notes</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "provider_id": 2,
+  "booking_date": "2026-06-01",
+  "time_slot": "08:00-12:00",
+  "notes": "Please bring replacement pipe parts"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "client_id": 1,
+    "provider_id": 2,
+    "booking_date": "2026-06-01",
+    "time_slot": "08:00-12:00",
+    "status": "PENDING",
+    "agreed_price": null,
+    "qr_code": null,
+    "notes": "Please bring replacement pipe parts",
+    "created_at": "2026-04-12T12:00:00.000Z",
+    "updated_at": "2026-04-12T12:00:00.000Z"
+  }
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Invalid time slot. Choose from: 08:00-12:00, 12:00-15:00, 15:00-18:00, 18:00-21:00"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "This time slot is already booked"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>201</strong>. DB-level unique
+                  constraint prevents double booking of the same
+                  provider/date/slot combination.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/bookings</span
+                ><span class="subtle">List bookings for current user</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns bookings where the current user is the client or
+                  provider, depending on their role.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Query param</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>status</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Exact match on booking status</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "client_id": 1,
+      "provider_id": 2,
+      "booking_date": "2026-06-01",
+      "time_slot": "08:00-12:00",
+      "status": "PENDING",
+      "client_name": "Ali",
+      "client_phone": "0600000000",
+      "provider_name": "Ahmed",
+      "provider_phone": "0611111111",
+      "category_name": "Plumbing"
+    }
+  ]
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Empty result returns an
+                  empty array.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/bookings/:id</span
+                ><span class="subtle">Get booking detail</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Accessible only to the booking client, booking provider, or
+                  an admin.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">id</span> (number, required) - booking
+                      ID
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "client_id": 1,
+    "provider_id": 2,
+    "booking_date": "2026-06-01",
+    "time_slot": "08:00-12:00",
+    "status": "CONFIRMED",
+    "agreed_price": 150,
+    "qr_code": "0a4fe62c...",
+    "client_name": "Ali",
+    "provider_name": "Ahmed",
+    "category_name": "Plumbing"
+  }
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Booking not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/bookings/:id/confirm</span
+                ><span class="subtle">Provider confirms a pending booking</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Provider-only endpoint. Generates a unique QR token and moves
+                  the booking to <span class="mono">CONFIRMED</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">id</span> (number, required) - booking
+                      ID
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Auth rules</th>
+                    <td>
+                      Requires role <span class="mono">PROVIDER</span> and
+                      provider must own the booking
+                    </td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "status": "CONFIRMED",
+    "qr_code": "2f79a0194b7c975f4e1a6d3d0f8f6e5d..."
+  }
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Only the provider can confirm this booking"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Cannot confirm a booking with status: CONFIRMED"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. The QR token is
+                  generated server-side using Node
+                  <span class="mono">crypto.randomBytes(32)</span>.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/bookings/:id/set-price</span
+                ><span class="subtle">Set agreed booking price</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Allows either participant to set or update
+                  <span class="mono">agreed_price</span> while the booking is
+                  <span class="mono">CONFIRMED</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Rules</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>agreed_price</td>
+                    <td>number</td>
+                    <td>Yes</td>
+                    <td>Must be greater than 0</td>
+                    <td>Negotiated service price</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "agreed_price": 150
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "message": "Agreed price saved",
+  "data": {
+    "agreed_price": 150
+  }
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "A valid agreed_price is required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Price can only be set on a confirmed booking"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Both client and provider
+                  may call this endpoint if they own the booking.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/bookings/:id/scan-qr</span
+                ><span class="subtle">Validate QR and start service</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Provider-only endpoint. Despite some code comments mentioning
+                  client scan, the implementation requires the provider to
+                  submit the QR code and moves the booking to
+                  <span class="mono">IN_PROGRESS</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Auth rules</th>
+                    <td>
+                      Requires role <span class="mono">PROVIDER</span> and
+                      provider ownership
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>qr_code</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>Must match the stored booking QR code</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "qr_code": "2f79a0194b7c975f4e1a6d3d0f8f6e5d..."
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "message": "QR scanned - service is now in progress"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "qr_code is required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Invalid QR code"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Also fails if booking is
+                  not currently <span class="mono">CONFIRMED</span>.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/bookings/:id/complete</span
+                ><span class="subtle">Mark booking complete</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Provider-only endpoint. Booking must already be
+                  <span class="mono">IN_PROGRESS</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "message": "Booking completed"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Only the provider can complete this booking"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Cannot complete a booking with status: CONFIRMED"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. Completion creates a
+                  notification prompting the client to review.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/bookings/:id/cancel</span
+                ><span class="subtle">Cancel booking</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Either booking participant may cancel if status is
+                  <span class="mono">PENDING</span> or
+                  <span class="mono">CONFIRMED</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "message": "Booking cancelled"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Cannot cancel a booking with status: COMPLETED"
+}</pre
+                >
+                <p class="small">Success status: <strong>200</strong>.</p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/bookings/:id/review</span
+                ><span class="subtle">Submit review for completed booking</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Client-only endpoint that inserts one review per booking and
+                  recalculates provider rating totals.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Auth rules</th>
+                    <td>
+                      Requires role <span class="mono">CLIENT</span> and booking
+                      ownership
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Rules</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>rating</td>
+                    <td>number</td>
+                    <td>Yes</td>
+                    <td>1 through 5 inclusive</td>
+                    <td>Star rating</td>
+                  </tr>
+                  <tr>
+                    <td>comment</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Optional</td>
+                    <td>Free text review comment</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "rating": 5,
+  "comment": "Excellent work!"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "message": "Review submitted"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Rating must be between 1 and 5"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "You already reviewed this booking"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>201</strong>. Booking must be
+                  <span class="mono">COMPLETED</span>.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/bookings/:bookingId/messages</span
+                ><span class="subtle">List booking chat messages</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns the chat history for a booking and marks unread
+                  messages from the other participant as read.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">bookingId</span> (number, required)
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "content": "Hello!",
+      "is_read": 0,
+      "created_at": "2026-04-12T12:00:00.000Z",
+      "sender_id": 1,
+      "sender_name": "Ali",
+      "sender_avatar": null
+    }
+  ]
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Booking not found or access denied"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/bookings/:bookingId/messages</span
+                ><span class="subtle">Send a booking chat message</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Creates a chat message if the user belongs to the booking and
+                  the booking is not cancelled or completed.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">bookingId</span> (number, required)
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>content</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>
+                      Trimmed message body; cannot be empty or whitespace-only
+                    </td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "content": "I will be there at 8am."
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "content": "I will be there at 8am.",
+    "is_read": 0,
+    "created_at": "2026-04-12T12:05:00.000Z",
+    "sender_id": 2,
+    "sender_name": "Ahmed",
+    "sender_avatar": "https://cdn.example.com/avatar.jpg"
+  }
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Message content is required"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Cannot send messages on a booking that is cancelled or completed"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>201</strong>. Code currently also
+                  allows sending while booking is
+                  <span class="mono">IN_PROGRESS</span>.
+                </p>
+              </div>
+            </details>
+          </section>
+
+          <section id="token-endpoints" class="panel">
+            <h2 class="section-title">Token Endpoints</h2>
+            <p class="section-summary">
+              Wallet and token purchase routes mounted under
+              <span class="mono">/api/tokens</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/tokens/balance</span
+                ><span class="subtle">Get current wallet balance</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns only the numeric balance field.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": { "balance": 3 },
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/tokens/history</span
+                ><span class="subtle">Get wallet transaction history</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns transactions ordered newest first.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "type": "PURCHASE",
+      "amount": 5,
+      "description": "Token purchase",
+      "booking_id": null,
+      "created_at": "2026-04-12T12:00:00.000Z"
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+                <p class="small">
+                  Transaction types visible in schema/tests:
+                  <span class="mono">PURCHASE</span>,
+                  <span class="mono">DEDUCTION</span>,
+                  <span class="mono">REWARD</span>.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/tokens/buy</span
+                ><span class="subtle">Buy tokens</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Adds tokens directly to the user's balance and records a
+                  <span class="mono">PURCHASE</span> transaction. No real
+                  payment gateway verification is implemented.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Rules</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>amount</td>
+                    <td>number</td>
+                    <td>Yes</td>
+                    <td>Must be greater than 0</td>
+                    <td>Number of tokens to add</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "amount": 5
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": { "new_balance": 8 },
+  "message": "5 token(s) purchased successfully"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "amount must be a positive number"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+                <p class="small">
+                  Success status: <strong>200</strong>. This endpoint is
+                  business-critical but currently not tied to Stripe or any
+                  external payment confirmation.
+                </p>
+              </div>
+            </details>
+          </section>
+
+          <section id="report-endpoints" class="panel">
+            <h2 class="section-title">Report Endpoints</h2>
+            <p class="section-summary">
+              User reporting routes mounted under
+              <span class="mono">/api/reports</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/reports</span
+                ><span class="subtle">Submit a report</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Creates a moderation report filed by the current user.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>None</td>
+                  </tr>
+                  <tr>
+                    <th>Query params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Allowed values</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>reported_user_id</td>
+                    <td>number</td>
+                    <td>No</td>
+                    <td>-</td>
+                    <td>User being reported</td>
+                  </tr>
+                  <tr>
+                    <td>booking_id</td>
+                    <td>number</td>
+                    <td>No</td>
+                    <td>-</td>
+                    <td>Related booking ID</td>
+                  </tr>
+                  <tr>
+                    <td>type</td>
+                    <td>string</td>
+                    <td>Yes</td>
+                    <td>
+                      <span class="mono">NOSHOW</span>,
+                      <span class="mono">ABSENT</span>,
+                      <span class="mono">OTHER</span>
+                    </td>
+                    <td>Report type</td>
+                  </tr>
+                  <tr>
+                    <td>description</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>-</td>
+                    <td>Optional narrative</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "reported_user_id": 2,
+  "booking_id": 1,
+  "type": "NOSHOW",
+  "description": "Provider did not arrive at the agreed time"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "reporter_id": 1,
+    "reported_user_id": 2,
+    "booking_id": 1,
+    "type": "NOSHOW",
+    "description": "Provider did not arrive at the agreed time",
+    "status": "PENDING"
+  },
+  "message": "Report submitted"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "type must be NOSHOW, ABSENT or OTHER"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+                <p class="small">Success status: <strong>201</strong>.</p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/reports</span
+                ><span class="subtle"
+                  >List reports filed by or against current user</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Returns reports where the current user is either the reporter
+                  or the reported user.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "reporter_id": 1,
+      "reported_user_id": 2,
+      "booking_id": 1,
+      "type": "NOSHOW",
+      "description": "Provider did not arrive",
+      "status": "PENDING",
+      "reporter_name": "Ali",
+      "reported_user_name": "Ahmed"
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Your account has been suspended"
+}</pre
+                >
+              </div>
+            </details>
+          </section>
+
+          <section id="notification-endpoints" class="panel">
+            <h2 class="section-title">Notification Endpoints</h2>
+            <p class="section-summary">
+              Notification read-state routes mounted under
+              <span class="mono">/api/notifications</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/notifications</span
+                ><span class="subtle">List current user's notifications</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span>Returns
+                  notifications ordered by newest first.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "type": "BOOKING_CONFIRMED",
+      "title": "Booking Confirmed",
+      "message": "Your booking on 2026-06-01 (08:00-12:00) is confirmed.",
+      "data": "{\"booking_id\":1}",
+      "is_read": 0,
+      "created_at": "2026-04-12T12:00:00.000Z"
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/notifications/:id/read</span
+                ><span class="subtle">Mark one notification as read</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span>Marks a
+                  single notification owned by the current user as read.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">id</span> (number, required) -
+                      notification ID
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": null,
+  "message": "Notification marked as read"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Notification not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/notifications/read-all</span
+                ><span class="subtle">Mark all notifications as read</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span>Marks all
+                  notifications for the current user as read.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": null,
+  "message": "All notifications marked as read"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Database error message"
+}</pre
+                >
+              </div>
+            </details>
+          </section>
+
+          <section id="admin-endpoints" class="panel">
+            <h2 class="section-title">Admin Endpoints</h2>
+            <p class="section-summary">
+              Administrative moderation and analytics routes mounted under
+              <span class="mono">/api/admin</span>. All require
+              <span class="mono">protect</span> plus role
+              <span class="mono">ADMIN</span>.
+            </p>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/admin/dashboard</span
+                ><span class="subtle">Dashboard summary metrics</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Returns
+                  totals for users, bookings, providers, pending reports,
+                  purchased tokens, and up to five recent bookings.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "total_users": 42,
+    "total_bookings": 18,
+    "total_providers": 10,
+    "pending_reports": 3,
+    "total_tokens_purchased": 90,
+    "recent_bookings": [
+      {
+        "id": 1,
+        "status": "PENDING",
+        "agreed_price": 150,
+        "created_at": "2026-04-12T12:00:00.000Z",
+        "client_name": "Ali",
+        "provider_name": "Ahmed"
+      }
+    ]
+  },
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/admin/users</span
+                ><span class="subtle">List users with optional filters</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Lists users
+                  ordered by newest first.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Query param</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>role</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Exact match on user role</td>
+                  </tr>
+                  <tr>
+                    <td>status</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Exact match on user status</td>
+                  </tr>
+                  <tr>
+                    <td>search</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>
+                      Case-sensitive SQL <span class="mono">LIKE</span> on name
+                    </td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Ali",
+      "email": "ali@test.com",
+      "phone": "0600000000",
+      "role": "CLIENT",
+      "avatar": null,
+      "status": "ACTIVE",
+      "token_balance": 5,
+      "created_at": "2026-04-12T12:00:00.000Z"
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/admin/users/:id/warn</span
+                ><span class="subtle">Set user status to WARNED</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Updates the
+                  target user's status to <span class="mono">WARNED</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">id</span> (number, required) - user ID
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": { "id": 3, "status": "WARNED" },
+  "message": "User status set to WARNED"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "User not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/admin/users/:id/restrict</span
+                ><span class="subtle">Set user status to RESTRICTED</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Updates user
+                  status to <span class="mono">RESTRICTED</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": { "id": 3, "status": "RESTRICTED" },
+  "message": "User status set to RESTRICTED"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "User not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/admin/users/:id/suspend</span
+                ><span class="subtle">Set user status to SUSPENDED</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Updates user
+                  status to <span class="mono">SUSPENDED</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": { "id": 3, "status": "SUSPENDED" },
+  "message": "User status set to SUSPENDED"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "User not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method delete">DELETE</span
+                ><span class="path">/api/admin/users/:id</span
+                ><span class="subtle">Delete a user</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Deletes a
+                  user by ID.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": null,
+  "message": "User deleted"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "User not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/admin/reports</span
+                ><span class="subtle">List reports for moderation</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Lists all
+                  reports with reporter and reported user names.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Query param</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>status</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Filter by report status</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "reporter_id": 1,
+      "reported_user_id": 2,
+      "type": "NOSHOW",
+      "status": "PENDING",
+      "reporter_name": "Ali",
+      "reported_user_name": "Ahmed"
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/admin/reports/:id</span
+                ><span class="subtle"
+                  >Update report status and admin notes</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Updates a
+                  report. If no status is provided, defaults to
+                  <span class="mono">REVIEWED</span>.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono">Authorization: Bearer &lt;jwt&gt;</span
+                      >,
+                      <span class="mono">Content-Type: application/json</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td>
+                      <span class="mono">id</span> (number, required) - report
+                      ID
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>status</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>
+                      Report status, inferred valid values:
+                      <span class="mono">PENDING</span>,
+                      <span class="mono">REVIEWED</span>,
+                      <span class="mono">RESOLVED</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>admin_notes</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Internal moderation notes</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "status": "RESOLVED",
+  "admin_notes": "Client refunded and provider warned"
+}</pre
+                >
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "status": "RESOLVED",
+    "admin_notes": "Client refunded and provider warned"
+  },
+  "message": "Report updated"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Report not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/admin/bookings</span
+                ><span class="subtle">List bookings for moderation</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Lists all
+                  bookings with participant names.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                </table>
+                <table>
+                  <tr>
+                    <th>Query param</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                  </tr>
+                  <tr>
+                    <td>status</td>
+                    <td>string</td>
+                    <td>No</td>
+                    <td>Filter by booking status</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "status": "PENDING",
+      "client_name": "Ali",
+      "provider_name": "Ahmed"
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, no token"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/admin/bookings/:id/complete</span
+                ><span class="subtle">Force booking to completed</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Directly
+                  updates a booking status to
+                  <span class="mono">COMPLETED</span> without checking current
+                  booking state.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Path params</th>
+                    <td><span class="mono">id</span> (number, required)</td>
+                  </tr>
+                  <tr>
+                    <th>Body</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "status": "COMPLETED"
+  },
+  "message": "Booking marked as completed"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Booking not found"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+                <p class="small">
+                  This endpoint bypasses the normal provider-only workflow and
+                  is therefore a powerful moderation override.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/admin/tokens</span
+                ><span class="subtle"
+                  >Get token statistics and transaction feed</span
+                >
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-admin">ADMIN only</span>Returns
+                  aggregate token statistics and a full transaction list with
+                  user names.
+                </p>
+                <table>
+                  <tr>
+                    <th>Headers</th>
+                    <td>
+                      <span class="mono"
+                        >Authorization: Bearer &lt;jwt&gt;</span
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Params</th>
+                    <td>None</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": {
+    "stats": {
+      "total_purchased": 50,
+      "total_deducted": 10,
+      "total_rewarded": 2
+    },
+    "transactions": [
+      {
+        "id": 1,
+        "user_id": 1,
+        "type": "PURCHASE",
+        "amount": 5,
+        "description": "Token purchase",
+        "user_name": "Ali",
+        "created_at": "2026-04-12T12:00:00.000Z"
+      }
+    ]
+  },
+  "message": "OK"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Access denied: insufficient role"
+}</pre
+                >
+                <pre>
+{
+  "success": false,
+  "message": "Not authorized, token failed"
+}</pre
+                >
+              </div>
+            </details>
+          </section>
+
+          <section id="inactive-endpoints" class="panel">
+            <h2 class="section-title">Defined But Not Mounted</h2>
+            <p class="section-summary">
+              The repository contains route and controller files for offers, but
+              <span class="mono">backend/src/app.js</span> does not mount them.
+              These endpoints are therefore not reachable in the current
+              application unless the app is changed.
+            </p>
+            <div class="callout warn">
+              The offers feature also appears incomplete relative to the SQL
+              schema: <span class="mono">offerController.js</span> expects a
+              <span class="mono">service_offers</span> table, but that table is
+              not present in <span class="mono">init.sql</span>.
+            </div>
+
+            <details class="endpoint" open>
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/offers</span
+                ><span class="subtle">Defined in code, not mounted</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-danger">Inactive</span>Would list
+                  active offers with optional filters.
+                </p>
+                <table>
+                  <tr>
+                    <th>Query params</th>
+                    <td>
+                      <span class="mono">category_id</span>,
+                      <span class="mono">provider_id</span>,
+                      <span class="mono">search</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Expected auth</th>
+                    <td>Public according to route file</td>
+                  </tr>
+                </table>
+                <pre>
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "title": "Pipe repair",
+      "provider_id": 2,
+      "category_id": 1,
+      "price": 150
+    }
+  ],
+  "message": "OK"
+}</pre
+                >
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method get">GET</span
+                ><span class="path">/api/offers/:id</span
+                ><span class="subtle">Defined in code, not mounted</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-danger">Inactive</span>Would fetch
+                  one offer by ID.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method post">POST</span
+                ><span class="path">/api/offers</span
+                ><span class="subtle">Defined in code, not mounted</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-danger">Inactive</span
+                  ><span class="badge badge-auth">Bearer token</span
+                  ><span class="badge badge-warning">restricted middleware</span
+                  >Would create a provider-owned offer.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method put">PUT</span
+                ><span class="path">/api/offers/:id</span
+                ><span class="subtle">Defined in code, not mounted</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-danger">Inactive</span>Would update a
+                  provider-owned offer.
+                </p>
+              </div>
+            </details>
+
+            <details class="endpoint">
+              <summary>
+                <span class="method patch">PATCH</span
+                ><span class="path">/api/offers/:id/toggle</span
+                ><span class="subtle">Defined in code, not mounted</span>
+              </summary>
+              <div class="endpoint-body">
+                <p>
+                  <span class="badge badge-danger">Inactive</span>Would toggle
+                  offer activity.
+                </p>
+              </div>
+            </details>
+          </section>
+
+          <section class="panel">
+            <h2 class="section-title">Operational Notes</h2>
+            <div class="grid-2">
+              <div class="card">
+                <h3>Socket.IO Events</h3>
+                <ul>
+                  <li>
+                    <span class="mono">join</span> joins personal room
+                    <span class="mono">user_{userId}</span>
+                  </li>
+                  <li>
+                    <span class="mono">join:booking</span> joins booking room
+                    <span class="mono">booking_{bookingId}</span>
+                  </li>
+                  <li>
+                    Server emits events such as
+                    <span class="mono">notification:new</span>,
+                    <span class="mono">booking:new</span>,
+                    <span class="mono">booking:confirmed</span>,
+                    <span class="mono">booking:started</span>,
+                    <span class="mono">booking:price_set</span>,
+                    <span class="mono">message:new</span>, and
+                    <span class="mono">token:updated</span>
+                  </li>
+                </ul>
+              </div>
+              <div class="card">
+                <h3>Filtering, Pagination, Sorting</h3>
+                <ul>
+                  <li>No pagination was found on mounted endpoints</li>
+                  <li>
+                    Provider listing filters by
+                    <span class="mono">city</span> and
+                    <span class="mono">category_id</span>
+                  </li>
+                  <li>
+                    User/admin/report/booking listing endpoints support limited
+                    query filtering
+                  </li>
+                  <li>
+                    Sorting is fixed in SQL and not configurable by query params
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <p class="footer">
+            Generated from repository evidence in routes, controllers,
+            middleware, tests, SQL schema, and runtime configuration. Where
+            behavior was not explicitly returned by the code, examples were
+            inferred conservatively from the surrounding queries and tests.
+          </p>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
