@@ -1,9 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// For physical phone: 'http://192.168.1.10:5000/api'
-// For Android emulator: 'http://localhost:5000/api'
-const API_BASE_URL = 'http://192.168.1.10:5000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
