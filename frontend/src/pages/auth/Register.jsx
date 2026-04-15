@@ -17,6 +17,21 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 
+const MOROCCAN_CITIES = [
+  "Casablanca",
+  "Rabat",
+  "Marrakech",
+  "Fes",
+  "Tangier",
+  "Agadir",
+  "Meknes",
+  "Oujda",
+  "Kenitra",
+  "Tetouan",
+  "Safi",
+  "El Jadida",
+];
+
 const RegisterScreen = ({ navigation }) => {
   const [role, setRole] = useState("client");
   const [loading, setLoading] = useState(false);
@@ -28,11 +43,11 @@ const RegisterScreen = ({ navigation }) => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [avatar, setAvatar] = useState("");
+  const [selectedCity, setSelectedCity] = useState("Casablanca");
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
   const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
-  console.log(CLOUDINARY_PRESET);
   const validateForm = () => {
     if (!fullName.trim()) {
       Alert.alert("Erreur", "Veuillez entrer votre nom complet");
@@ -52,6 +67,10 @@ const RegisterScreen = ({ navigation }) => {
     }
     if (role === "provider" && !avatar) {
       Alert.alert("Erreur", "Veuillez ajouter une photo de profil");
+      return false;
+    }
+    if (role === "provider" && !selectedCity) {
+      Alert.alert("Erreur", "Veuillez choisir une ville au Maroc");
       return false;
     }
     if (!password) {
@@ -158,7 +177,7 @@ const RegisterScreen = ({ navigation }) => {
           phone,
           avatar,
           description: "Description du prestataire",
-          city: "Casablanca",
+          city: selectedCity,
           category_id: 1,
         };
       }
@@ -335,42 +354,71 @@ const RegisterScreen = ({ navigation }) => {
             </View>
 
             {role === "provider" && (
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Photo de profil</Text>
-                <TouchableOpacity
-                  style={styles.avatarUpload}
-                  onPress={pickAvatar}
-                  disabled={loading || uploadingAvatar}
-                  activeOpacity={0.8}
-                >
-                  {avatar ? (
-                    <Image
-                      source={{ uri: avatar }}
-                      style={styles.avatarPreview}
-                    />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Ionicons
-                        name="image-outline"
-                        size={28}
-                        color="#1A73E8"
+              <>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Ville</Text>
+                  <View style={styles.cityList}>
+                    {MOROCCAN_CITIES.map((city) => (
+                      <TouchableOpacity
+                        key={city}
+                        style={[
+                          styles.cityChip,
+                          selectedCity === city && styles.cityChipActive,
+                        ]}
+                        onPress={() => setSelectedCity(city)}
+                        disabled={loading || uploadingAvatar}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.cityChipText,
+                            selectedCity === city && styles.cityChipTextActive,
+                          ]}
+                        >
+                          {city}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Photo de profil</Text>
+                  <TouchableOpacity
+                    style={styles.avatarUpload}
+                    onPress={pickAvatar}
+                    disabled={loading || uploadingAvatar}
+                    activeOpacity={0.8}
+                  >
+                    {avatar ? (
+                      <Image
+                        source={{ uri: avatar }}
+                        style={styles.avatarPreview}
                       />
-                      <Text style={styles.avatarPlaceholderText}>
-                        Choisir une image
-                      </Text>
-                    </View>
-                  )}
-                  {uploadingAvatar && (
-                    <View style={styles.avatarOverlay}>
-                      <ActivityIndicator color="#FFFFFF" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.avatarHint}>
-                  La photo est envoyee vers Cloudinary et son URL sera
-                  enregistree dans avatar.
-                </Text>
-              </View>
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <Ionicons
+                          name="image-outline"
+                          size={28}
+                          color="#1A73E8"
+                        />
+                        <Text style={styles.avatarPlaceholderText}>
+                          Choisir une image
+                        </Text>
+                      </View>
+                    )}
+                    {uploadingAvatar && (
+                      <View style={styles.avatarOverlay}>
+                        <ActivityIndicator color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <Text style={styles.avatarHint}>
+                    La photo est envoyee vers Cloudinary et son URL sera
+                    enregistree dans avatar.
+                  </Text>
+                </View>
+              </>
             )}
 
             <View style={styles.inputContainer}>
@@ -546,6 +594,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#191C23",
     backgroundColor: "#F8FAFC",
+  },
+  cityList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  cityChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  cityChipActive: {
+    backgroundColor: "#E8F1FE",
+    borderColor: "#1A73E8",
+  },
+  cityChipText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  cityChipTextActive: {
+    color: "#1A73E8",
   },
   avatarUpload: {
     height: 170,
