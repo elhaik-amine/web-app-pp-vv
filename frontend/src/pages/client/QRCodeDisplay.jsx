@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, ScrollView, ActivityIndicator, Alert,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import QRCode from 'react-native-qrcode-svg';
 
 const QRCodeDisplayScreen = ({ navigation, route }) => {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [timeRemaining, setTimeRemaining] = useState(null);
   
   const { bookingId } = route.params || {};
   const API_URL = 'http://192.168.1.10:5000/api';
@@ -19,27 +20,6 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
       fetchBookingDetails();
     }
   }, [bookingId]);
-
-  useEffect(() => {
-    if (booking?.qr_expires_at) {
-      const timer = setInterval(() => {
-        const now = new Date();
-        const expiry = new Date(booking.qr_expires_at);
-        const diff = expiry - now;
-        
-        if (diff <= 0) {
-          setTimeRemaining('Expiré');
-          clearInterval(timer);
-        } else {
-          const hours = Math.floor(diff / (1000 * 60 * 60));
-          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          setTimeRemaining(`${hours}h ${minutes}m`);
-        }
-      }, 1000);
-      
-      return () => clearInterval(timer);
-    }
-  }, [booking]);
 
   const fetchBookingDetails = async () => {
     try {
@@ -53,9 +33,11 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
       });
       
       const data = await response.json();
+      console.log('Booking details:', data);
       
       if (data.success) {
         setBooking(data.data);
+        console.log('QR Code value:', data.data.qr_code);
       } else {
         Alert.alert('Erreur', data.message || 'Réservation non trouvée');
         navigation.goBack();
@@ -68,21 +50,13 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
     }
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  };
-
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const isQRValid = () => {
-    if (!booking?.qr_code) return false;
-    if (booking.status !== 'CONFIRMED' && booking.status !== 'IN_PROGRESS') return false;
-    if (booking.qr_expires_at && new Date(booking.qr_expires_at) < new Date()) return false;
-    return true;
+  const shareQRCode = () => {
+    if (booking?.qr_code) {
+      Share.share({
+        message: `Code QR pour la mission #${booking.id}: ${booking.qr_code}`,
+        title: 'Code QR Khdimati',
+      });
+    }
   };
 
   if (loading) {
@@ -109,7 +83,7 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
     );
   }
 
-  const qrValid = isQRValid();
+  const qrValid = booking.qr_code && (booking.status === 'CONFIRMED' || booking.status === 'IN_PROGRESS');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -120,13 +94,12 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
         <Text style={styles.headerTitle}>Code QR de Mission</Text>
         <View style={[styles.statusBadge, { backgroundColor: qrValid ? '#DCFCE7' : '#FEE2E2' }]}>
           <Text style={[styles.statusBadgeText, { color: qrValid ? '#166534' : '#991B1B' }]}>
-            {booking.status === 'CONFIRMED' ? 'CONFIRMÉ' : booking.status}
+            {booking.status === 'CONFIRMED' ? 'ACTIF' : booking.status}
           </Text>
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Booking Summary */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.summaryCard}>
           <View style={styles.providerRow}>
             <View style={styles.avatarPlaceholder}>
@@ -138,75 +111,50 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
             </View>
           </View>
           <View style={styles.divider} />
-          <View style={styles.detailsRow}>
-            <View style={styles.detailItem}>
-              <Ionicons name="calendar-outline" size={16} color="#64748B" />
-              <Text style={styles.detailText}>{formatDate(booking.booking_date)}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Ionicons name="time-outline" size={16} color="#64748B" />
-              <Text style={styles.detailText}>{booking.time_slot || 'Flexible'}</Text>
-            </View>
-          </View>
           <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Prix accordé</Text>
+            <Text style={styles.priceLabel}>Prix</Text>
             <Text style={styles.priceValue}>{booking.agreed_price || booking.estimated_price || 0} MAD</Text>
           </View>
         </View>
 
-        {/* QR Code Display */}
+        {/* QR Code */}
         <View style={[styles.qrCard, !qrValid && styles.qrCardDisabled]}>
           {qrValid && booking.qr_code ? (
             <>
               <View style={styles.qrContainer}>
-                <Ionicons name="qr-code" size={160} color="#191C23" />
+                <QRCode
+                  value={booking.qr_code}
+                  size={220}
+                  bgColor="#000000"
+                  fgColor="#FFFFFF"
+                />
               </View>
-              <View style={styles.qrCodeBox}>
-                <Text style={styles.qrCodeText} selectable>
-                  {booking.qr_code}
-                </Text>
-              </View>
-              <Text style={styles.bookingId}>Code unique de la mission</Text>
+              <Text style={styles.qrCodeValue} selectable>
+                Code: {booking.qr_code.substring(0, 16)}...
+              </Text>
+              <TouchableOpacity style={styles.shareButton} onPress={shareQRCode}>
+                <Ionicons name="share-outline" size={20} color="#1A73E8" />
+                <Text style={styles.shareButtonText}>Partager le QR code</Text>
+              </TouchableOpacity>
             </>
           ) : (
             <>
-              <View style={styles.qrContainer}>
-                <Ionicons name="qr-code-outline" size={120} color="#CBD5E1" />
+              <View style={styles.qrPlaceholder}>
+                <Ionicons name="qr-code-outline" size={100} color="#CBD5E1" />
               </View>
               <Text style={styles.qrDisabledText}>
-                {booking.status === 'PENDING' 
-                  ? 'QR Code disponible après confirmation' 
-                  : booking.status === 'COMPLETED' || booking.status === 'CANCELLED'
-                  ? 'QR Code expiré'
-                  : 'QR Code temporairement indisponible'}
+                QR Code disponible après confirmation du prestataire
               </Text>
             </>
           )}
         </View>
 
-        {/* Timer */}
-        {qrValid && booking.qr_expires_at && (
-          <View style={styles.timerBox}>
-            <View style={styles.timerHeader}>
-              <Ionicons name="time" size={20} color="#1A73E8" />
-              <Text style={styles.timerTitle}>Validité du QR</Text>
-            </View>
-            <Text style={styles.timerValue}>{timeRemaining || 'Calcul...'}</Text>
-            <Text style={styles.timerSubtitle}>
-              Actif jusqu'au {formatTime(booking.qr_expires_at)}
-            </Text>
-          </View>
-        )}
-
-        {/* Warning */}
         <View style={styles.warningBox}>
           <Ionicons name="alert-circle" size={24} color="#EF4444" />
           <Text style={styles.warningText}>
-            ⚠️ Montrez ce QR uniquement quand le prestataire a terminé la mission. Ne le montrez pas avant !
+            ⚠️ Montrez ce QR uniquement au prestataire quand il arrive.
           </Text>
         </View>
-
-        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -224,36 +172,28 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#191C23' },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   statusBadgeText: { fontSize: 12, fontWeight: '800' },
-  scrollContent: { padding: 24 },
-  summaryCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24, elevation: 2 },
+  scrollContent: { padding: 24, alignItems: 'center' },
+  summaryCard: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24 },
   providerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   avatarPlaceholder: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#F0F7FF', alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { fontSize: 20, fontWeight: '700', color: '#1A73E8' },
-  providerInfo: { marginLeft: 12 },
+  providerInfo: { marginLeft: 12, flex: 1 },
   providerName: { fontSize: 16, fontWeight: '700', color: '#191C23' },
   serviceCategory: { fontSize: 13, color: '#64748B' },
   divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 16 },
-  detailsRow: { flexDirection: 'row', marginBottom: 20 },
-  detailItem: { flexDirection: 'row', alignItems: 'center', marginRight: 24 },
-  detailText: { fontSize: 14, color: '#475569', marginLeft: 6 },
-  priceContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0FDF4', padding: 16, borderRadius: 16 },
-  priceLabel: { fontSize: 14, fontWeight: '600', color: '#166534' },
-  priceValue: { fontSize: 20, fontWeight: '800', color: '#10B981' },
-  qrCard: { backgroundColor: '#FFFFFF', borderRadius: 32, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24, elevation: 5 },
+  priceContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  priceLabel: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  priceValue: { fontSize: 18, fontWeight: '800', color: '#1A73E8' },
+  qrCard: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 32, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24 },
   qrCardDisabled: { opacity: 0.6 },
-  qrContainer: { width: 200, height: 200, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  qrCodeBox: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginTop: 8, width: '100%' },
-  qrCodeText: { fontSize: 12, color: '#1A73E8', textAlign: 'center', fontFamily: 'monospace' },
+  qrContainer: { padding: 16, backgroundColor: '#000000', borderRadius: 16, marginBottom: 16 },
+  qrCodeValue: { fontSize: 12, color: '#94A3B8', fontFamily: 'monospace', marginTop: 8 },
+  shareButton: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#F0F7FF', borderRadius: 20 },
+  shareButtonText: { fontSize: 14, fontWeight: '600', color: '#1A73E8', marginLeft: 8 },
+  qrPlaceholder: { width: 220, height: 220, backgroundColor: '#F8FAFC', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   qrDisabledText: { fontSize: 14, color: '#64748B', textAlign: 'center', marginTop: 16 },
-  bookingId: { fontSize: 16, fontWeight: '600', color: '#94A3B8', letterSpacing: 1, marginTop: 12 },
-  warningBox: { backgroundColor: '#FEF2F2', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: '#FEE2E2', flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
+  warningBox: { width: '100%', backgroundColor: '#FEF2F2', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: '#FEE2E2', flexDirection: 'row', alignItems: 'center' },
   warningText: { flex: 1, marginLeft: 12, fontSize: 13, color: '#EF4444', fontWeight: '700', lineHeight: 20 },
-  timerBox: { backgroundColor: '#F0F7FF', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: '#D0E4FF', alignItems: 'center' },
-  timerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  timerTitle: { fontSize: 14, fontWeight: '700', color: '#1A73E8', marginLeft: 8 },
-  timerValue: { fontSize: 28, fontWeight: '800', color: '#1A73E8', marginBottom: 4 },
-  timerSubtitle: { fontSize: 13, color: '#475569', textAlign: 'center' },
-  bottomSpacer: { height: 40 },
 });
 
 export default QRCodeDisplayScreen;

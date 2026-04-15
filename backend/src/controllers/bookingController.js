@@ -3,18 +3,23 @@ const { pool } = require('../config/db');
 const { getIO } = require('../socket');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
 const ALL_SLOTS = ['08:00-12:00', '12:00-15:00', '15:00-18:00', '18:00-21:00'];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
 const createNotification = async (userId, type, title, message, data = null) => {
-  await pool.execute(
+  const [result] = await pool.execute(
     'INSERT INTO notifications (user_id, type, title, message, data) VALUES (?, ?, ?, ?, ?)',
     [userId, type, title, message, data ? JSON.stringify(data) : null]
   );
+  const payload = {
+    id: result.insertId,
+    type,
+    title,
+    message,
+    data: data || {},
+  };
   try {
-    getIO().to(`user_${userId}`).emit('notification:new', { type, title, message });
+    getIO().to(`user_${userId}`).emit('notification:new', payload);
   } catch (_) {}
 };
 
@@ -23,20 +28,16 @@ const getBooking = async (id) => {
   return rows[0] || null;
 };
 
-// ─── GET /api/bookings/slots?provider_id=&date= ───────────────────────────────
-// Returns available slots for a provider on a date.
-// A slot is unavailable if a non-cancelled booking already exists for it.
+// ─── GET /api/bookings/slots ───────────────────────────────────────────────
 const getAvailableSlots = async (req, res) => {
   try {
     const { provider_id, date } = req.query;
-
     if (!provider_id || !date) {
       return res.status(400).json({ success: false, message: 'provider_id and date are required' });
     }
 
     const [takenRows] = await pool.execute(
-      `SELECT time_slot FROM bookings
-       WHERE provider_id = ? AND booking_date = ? AND status != 'CANCELLED'`,
+      `SELECT time_slot FROM bookings WHERE provider_id = ? AND booking_date = ? AND status != 'CANCELLED'`,
       [provider_id, date]
     );
 
@@ -50,10 +51,9 @@ const getAvailableSlots = async (req, res) => {
 };
 
 // ─── POST /api/bookings ───────────────────────────────────────────────────────
-// Client creates a booking → status: PENDING
 const createBooking = async (req, res) => {
   try {
-    const { provider_id, booking_date, time_slot, notes } = req.body;
+    const { provider_id, booking_date, time_slot, agreed_price, notes } = req.body;
 
     if (!provider_id || !booking_date || !time_slot) {
       return res.status(400).json({ success: false, message: 'provider_id, booking_date, and time_slot are required' });
@@ -64,9 +64,7 @@ const createBooking = async (req, res) => {
     }
 
     const [providers] = await pool.execute(
-      `SELECT u.id, u.name FROM users u
-       JOIN provider_profiles pp ON pp.user_id = u.id
-       WHERE u.id = ? AND u.status = 'ACTIVE' AND pp.is_active = 1`,
+      `SELECT u.id, u.name FROM users u JOIN provider_profiles pp ON pp.user_id = u.id WHERE u.id = ? AND u.status = 'ACTIVE' AND pp.is_active = 1`,
       [provider_id]
     );
 
@@ -74,23 +72,33 @@ const createBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Provider not found or not available' });
     }
 
+    // Save the booking with the price from Step 2
     const [result] = await pool.execute(
-      `INSERT INTO bookings (client_id, provider_id, booking_date, time_slot, notes)
-       VALUES (?, ?, ?, ?, ?)`,
-      [req.user.id, provider_id, booking_date, time_slot, notes || null]
+      `INSERT INTO bookings (client_id, provider_id, booking_date, time_slot, estimated_price, agreed_price, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, provider_id, booking_date, time_slot, agreed_price, agreed_price, notes || null]
     );
 
     const booking = await getBooking(result.insertId);
+    
+    const [clientRows] = await pool.execute('SELECT name FROM users WHERE id = ?', [req.user.id]);
+    const clientName = clientRows[0]?.name || 'Un client';
 
     await createNotification(
       provider_id,
       'BOOKING_NEW',
-      'New Booking Request',
-      `${req.user.name} booked you on ${booking_date} (${time_slot})`,
+      'Nouvelle demande de réservation',
+      `${clientName} a réservé vos services pour ${agreed_price} MAD le ${booking_date} (${time_slot})`,
       { booking_id: booking.id }
     );
 
-    try { getIO().to(`user_${provider_id}`).emit('booking:new', booking); } catch (_) {}
+    try { 
+      const io = getIO();
+      io.to(`user_${provider_id}`).emit('booking:new', { 
+        ...booking, 
+        client_name: clientName 
+      });
+      io.to(`user_${provider_id}`).emit('booking:updated', { message: 'New booking received' });
+    } catch (_) {}
 
     res.status(201).json({ success: true, data: booking });
   } catch (error) {
@@ -109,13 +117,13 @@ const getBookings = async (req, res) => {
 
     let sql = `
       SELECT b.*,
-             c.name  AS client_name,   c.phone  AS client_phone,
-             p.name  AS provider_name, p.phone  AS provider_phone,
+             c.name AS client_name, c.phone AS client_phone,
+             p.name AS provider_name, p.phone AS provider_phone,
              sc.name AS category_name
       FROM bookings b
-      JOIN users c  ON c.id = b.client_id
-      JOIN users p  ON p.id = b.provider_id
-      LEFT JOIN provider_profiles pp  ON pp.user_id = b.provider_id
+      JOIN users c ON c.id = b.client_id
+      JOIN users p ON p.id = b.provider_id
+      LEFT JOIN provider_profiles pp ON pp.user_id = b.provider_id
       LEFT JOIN service_categories sc ON sc.id = pp.category_id
       WHERE b.${field} = ?
     `;
@@ -137,13 +145,13 @@ const getBookingById = async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT b.*,
-              c.name  AS client_name,   c.phone  AS client_phone,
-              p.name  AS provider_name, p.phone  AS provider_phone,
+              c.name AS client_name, c.phone AS client_phone,
+              p.name AS provider_name, p.phone AS provider_phone,
               sc.name AS category_name
        FROM bookings b
-       JOIN users c  ON c.id = b.client_id
-       JOIN users p  ON p.id = b.provider_id
-       LEFT JOIN provider_profiles pp  ON pp.user_id = b.provider_id
+       JOIN users c ON c.id = b.client_id
+       JOIN users p ON p.id = b.provider_id
+       LEFT JOIN provider_profiles pp ON pp.user_id = b.provider_id
        LEFT JOIN service_categories sc ON sc.id = pp.category_id
        WHERE b.id = ?`,
       [req.params.id]
@@ -154,7 +162,6 @@ const getBookingById = async (req, res) => {
     }
 
     const booking = rows[0];
-
     if (booking.client_id !== req.user.id && booking.provider_id !== req.user.id && req.user.role !== 'ADMIN') {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
@@ -166,7 +173,6 @@ const getBookingById = async (req, res) => {
 };
 
 // ─── PATCH /api/bookings/:id/confirm ─────────────────────────────────────────
-// Provider confirms → status: CONFIRMED + QR token generated + chat opens
 const confirmBooking = async (req, res) => {
   try {
     const booking = await getBooking(req.params.id);
@@ -179,24 +185,28 @@ const confirmBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cannot confirm a booking with status: ${booking.status}` });
     }
 
-    // Generate a unique QR token — frontend turns this into a QR code image
     const qrCode = crypto.randomBytes(32).toString('hex');
+    const qrExpiresAt = new Date();
+    qrExpiresAt.setHours(qrExpiresAt.getHours() + 2);
 
     await pool.execute(
-      "UPDATE bookings SET status = 'CONFIRMED', qr_code = ? WHERE id = ?",
-      [qrCode, booking.id]
+      "UPDATE bookings SET status = 'CONFIRMED', qr_code = ?, qr_expires_at = ? WHERE id = ?",
+      [qrCode, qrExpiresAt, booking.id]
     );
 
     await createNotification(
       booking.client_id,
       'BOOKING_CONFIRMED',
       'Booking Confirmed',
-      `Your booking on ${booking.booking_date} (${booking.time_slot}) is confirmed. Chat is now open.`,
+      `Your booking on ${booking.booking_date} (${booking.time_slot}) is confirmed.`,
       { booking_id: booking.id }
     );
 
     const updated = await getBooking(booking.id);
-    try { getIO().to(`user_${booking.client_id}`).emit('booking:confirmed', updated); } catch (_) {}
+    try { 
+      getIO().to(`user_${booking.client_id}`).emit('booking:confirmed', updated);
+      getIO().to(`user_${booking.provider_id}`).emit('booking:confirmed', updated);
+    } catch (_) {}
 
     res.json({ success: true, data: updated });
   } catch (error) {
@@ -204,13 +214,136 @@ const confirmBooking = async (req, res) => {
   }
 };
 
+// ─── POST /api/bookings/:id/accept-price ─────────────────────────────────────
+const acceptPrice = async (req, res) => {
+  try {
+    const { price } = req.body;
+    const bookingId = req.params.id;
+
+    if (!price || price <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid price required' });
+    }
+
+    const booking = await getBooking(bookingId);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    if (booking.client_id !== req.user.id && booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const [existing] = await pool.execute(
+      'SELECT * FROM price_acceptances WHERE booking_id = ? AND user_id = ?',
+      [bookingId, req.user.id]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, message: 'Vous avez déjà accepté ce prix' });
+    }
+
+    await pool.execute(
+      'INSERT INTO price_acceptances (booking_id, user_id, price) VALUES (?, ?, ?)',
+      [bookingId, req.user.id, price]
+    );
+
+    const [acceptances] = await pool.execute(
+      'SELECT * FROM price_acceptances WHERE booking_id = ?',
+      [bookingId]
+    );
+
+    const bothAccepted = acceptances.length === 2;
+    const otherUserId = booking.client_id === req.user.id ? booking.provider_id : booking.client_id;
+
+    if (bothAccepted) {
+      await pool.execute(
+        "UPDATE bookings SET status = 'CONFIRMED', agreed_price = ?, estimated_price = ? WHERE id = ?",
+        [price, price, bookingId]
+      );
+      
+      await pool.execute('DELETE FROM price_acceptances WHERE booking_id = ?', [bookingId]);
+
+      await createNotification(
+        otherUserId,
+        'PRICE_ACCEPTED_BOTH',
+        'Réservation confirmée',
+        `Le prix de ${price} MAD a été accepté par les deux parties. La réservation est confirmée !`,
+        { booking_id: bookingId, agreed_price: price }
+      );
+
+      const io = getIO();
+      io.to(`booking_${bookingId}`).emit('booking:confirmed', { booking_id: bookingId, agreed_price: price, status: 'CONFIRMED' });
+      io.to(`user_${booking.client_id}`).emit('booking:updated', { booking_id: bookingId, status: 'CONFIRMED', agreed_price: price });
+      io.to(`user_${booking.provider_id}`).emit('booking:updated', { booking_id: bookingId, status: 'CONFIRMED', agreed_price: price });
+
+      res.json({ success: true, message: 'Prix accepté par les deux parties. Réservation confirmée !', data: { bothAccepted: true, status: 'CONFIRMED', price: price } });
+    } else {
+      await pool.execute('UPDATE bookings SET estimated_price = ?, agreed_price = ? WHERE id = ?', 
+        [price, price, bookingId]);
+
+      await createNotification(
+        otherUserId,
+        'PRICE_ACCEPTED',
+        'Acceptation du prix',
+        `${req.user.name} a accepté le prix de ${price} MAD. Acceptez-vous également ?`,
+        { booking_id: bookingId, price: price }
+      );
+
+      const io = getIO();
+      io.to(`user_${otherUserId}`).emit('notification:new', {
+        type: 'PRICE_ACCEPTED',
+        title: 'Acceptation du prix',
+        message: `${req.user.name} a accepté le prix de ${price} MAD. Acceptez-vous également ?`,
+        data: { booking_id: bookingId, price: price }
+      });
+      io.to(`booking_${bookingId}`).emit('booking:price_updated', { booking_id: bookingId, estimated_price: price });
+
+      res.json({ success: true, message: 'Prix accepté. En attente de l\'acceptation de l\'autre partie.', data: { bothAccepted: false, price: price } });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── POST /api/bookings/:id/reject-price ─────────────────────────────────────
+const rejectPrice = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const booking = await getBooking(bookingId);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    if (booking.client_id !== req.user.id && booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    await pool.execute('DELETE FROM price_acceptances WHERE booking_id = ?', [bookingId]);
+
+    const otherUserId = booking.client_id === req.user.id ? booking.provider_id : booking.client_id;
+
+    await createNotification(
+      otherUserId,
+      'PRICE_REJECTED',
+      'Prix refusé',
+      `${req.user.name} a refusé le prix proposé. La négociation continue.`,
+      { booking_id: bookingId }
+    );
+
+    const io = getIO();
+    io.to(`user_${otherUserId}`).emit('notification:new', {
+      type: 'PRICE_REJECTED',
+      title: 'Prix refusé',
+      message: `${req.user.name} a refusé le prix. Continuez la négociation.`,
+      data: { booking_id: bookingId }
+    });
+
+    res.json({ success: true, message: 'Prix refusé. La négociation continue.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ─── PATCH /api/bookings/:id/set-price ───────────────────────────────────────
-// Client or provider sets the agreed price after chatting.
-// Either party can propose/update the agreed price while booking is CONFIRMED.
 const setAgreedPrice = async (req, res) => {
   try {
     const { agreed_price } = req.body;
-
     if (!agreed_price || agreed_price <= 0) {
       return res.status(400).json({ success: false, message: 'A valid agreed_price is required' });
     }
@@ -221,23 +354,27 @@ const setAgreedPrice = async (req, res) => {
     if (booking.client_id !== req.user.id && booking.provider_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
-    if (booking.status !== 'CONFIRMED') {
-      return res.status(400).json({ success: false, message: 'Price can only be set on a confirmed booking' });
-    }
 
-    await pool.execute('UPDATE bookings SET agreed_price = ? WHERE id = ?', [agreed_price, booking.id]);
+    await pool.execute('UPDATE bookings SET agreed_price = ?, estimated_price = ? WHERE id = ?', 
+      [agreed_price, agreed_price, booking.id]);
 
-    // Notify the other party about the agreed price
     const notifyId = req.user.id === booking.client_id ? booking.provider_id : booking.client_id;
     await createNotification(
       notifyId,
       'PRICE_AGREED',
-      'Price Set',
-      `${req.user.name} set the agreed price to ${agreed_price}`,
+      'Prix accepté',
+      `${req.user.name} a accepté le prix de ${agreed_price} MAD`,
       { booking_id: booking.id, agreed_price }
     );
 
-    try { getIO().to(`booking_${booking.id}`).emit('booking:price_set', { booking_id: booking.id, agreed_price }); } catch (_) {}
+    const io = getIO();
+    io.to(`booking_${booking.id}`).emit('booking:price_set', { booking_id: booking.id, agreed_price });
+    io.to(`user_${notifyId}`).emit('notification:new', {
+      type: 'PRICE_AGREED',
+      title: 'Prix accepté',
+      message: `${req.user.name} a accepté le prix de ${agreed_price} MAD`,
+      data: { booking_id: booking.id }
+    });
 
     res.json({ success: true, message: 'Agreed price saved', data: { agreed_price } });
   } catch (error) {
@@ -245,22 +382,51 @@ const setAgreedPrice = async (req, res) => {
   }
 };
 
+// ─── PATCH /api/bookings/:id/reject ───────────────────────────────────────────
+const rejectBookingOffer = async (req, res) => {
+  try {
+    const booking = await getBooking(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    if (booking.client_id !== req.user.id && booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const notifyId = req.user.id === booking.client_id ? booking.provider_id : booking.client_id;
+    await createNotification(
+      notifyId,
+      'OFFER_REJECTED',
+      'Offre refusée',
+      `${req.user.name} a refusé l'offre`,
+      { booking_id: booking.id }
+    );
+
+    const io = getIO();
+    io.to(`booking_${booking.id}`).emit('negotiation:rejected', { booking_id: booking.id, rejected_by: req.user.id });
+
+    res.json({ success: true, message: 'Offer rejected' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ─── POST /api/bookings/:id/scan-qr ──────────────────────────────────────────
-// Client scans the provider's QR code when provider arrives → status: IN_PROGRESS
-// The frontend reads the QR token and sends it here.
+// ─── POST /api/bookings/:id/scan-qr ──────────────────────────────────────────
 const scanQR = async (req, res) => {
   try {
     const { qr_code } = req.body;
+    const bookingId = req.params.id;
 
     if (!qr_code) {
       return res.status(400).json({ success: false, message: 'qr_code is required' });
     }
 
-    const booking = await getBooking(req.params.id);
+    const booking = await getBooking(bookingId);
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
-    if (booking.client_id !== req.user.id) {
-      return res.status(403).json({ success: false, message: 'Only the client can scan the QR code' });
+    // Allow PROVIDER to scan (changed from client)
+    if (booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the provider can scan the QR code' });
     }
     if (booking.status !== 'CONFIRMED') {
       return res.status(400).json({ success: false, message: `Cannot scan QR on a booking with status: ${booking.status}` });
@@ -272,14 +438,21 @@ const scanQR = async (req, res) => {
     await pool.execute("UPDATE bookings SET status = 'IN_PROGRESS' WHERE id = ?", [booking.id]);
 
     await createNotification(
-      booking.provider_id,
+      booking.client_id,
       'BOOKING_STARTED',
       'Service Started',
-      `${req.user.name} scanned your QR — the service has started`,
+      `${req.user.name} a démarré le service`,
       { booking_id: booking.id }
     );
 
-    try { getIO().to(`booking_${booking.id}`).emit('booking:started', { booking_id: booking.id }); } catch (_) {}
+    const io = getIO();
+    io.to(`booking_${booking.id}`).emit('booking:started', { booking_id: booking.id });
+    io.to(`user_${booking.client_id}`).emit('notification:new', {
+      type: 'BOOKING_STARTED',
+      title: 'Service démarré',
+      message: `Le prestataire a démarré votre service`,
+      data: { booking_id: booking.id }
+    });
 
     res.json({ success: true, message: 'QR scanned — service is now in progress' });
   } catch (error) {
@@ -288,7 +461,6 @@ const scanQR = async (req, res) => {
 };
 
 // ─── PATCH /api/bookings/:id/complete ────────────────────────────────────────
-// Provider marks the service as done → status: COMPLETED
 const completeBooking = async (req, res) => {
   try {
     const booking = await getBooking(req.params.id);
@@ -311,6 +483,9 @@ const completeBooking = async (req, res) => {
       { booking_id: booking.id }
     );
 
+    const io = getIO();
+    io.to(`booking_${booking.id}`).emit('booking:completed', { booking_id: booking.id });
+
     res.json({ success: true, message: 'Booking completed' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -318,7 +493,6 @@ const completeBooking = async (req, res) => {
 };
 
 // ─── PATCH /api/bookings/:id/cancel ──────────────────────────────────────────
-// Client or provider can cancel — only from PENDING or CONFIRMED
 const cancelBooking = async (req, res) => {
   try {
     const booking = await getBooking(req.params.id);
@@ -342,6 +516,9 @@ const cancelBooking = async (req, res) => {
       { booking_id: booking.id }
     );
 
+    const io = getIO();
+    io.to(`booking_${booking.id}`).emit('booking:cancelled', { booking_id: booking.id });
+
     res.json({ success: true, message: 'Booking cancelled' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -349,7 +526,6 @@ const cancelBooking = async (req, res) => {
 };
 
 // ─── POST /api/bookings/:id/review ───────────────────────────────────────────
-// Client reviews after COMPLETED
 const createReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
@@ -373,7 +549,6 @@ const createReview = async (req, res) => {
       [booking.id, booking.client_id, booking.provider_id, rating, comment || null]
     );
 
-    // Recalculate provider rating
     const [ratingRows] = await pool.execute(
       'SELECT AVG(rating) AS avg_rating, COUNT(*) AS total FROM reviews WHERE provider_id = ?',
       [booking.provider_id]
@@ -398,7 +573,10 @@ module.exports = {
   getBookings,
   getBookingById,
   confirmBooking,
+  acceptPrice,
+  rejectPrice,
   setAgreedPrice,
+  rejectBookingOffer,
   scanQR,
   cancelBooking,
   completeBooking,

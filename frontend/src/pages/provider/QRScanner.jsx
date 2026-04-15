@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ const QRScannerScreen = ({ navigation, route }) => {
   const [scanned, setScanned] = useState(false);
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   
   const { bookingId } = route.params || {};
   const API_URL = 'http://192.168.1.10:5000/api';
@@ -45,7 +45,7 @@ const QRScannerScreen = ({ navigation, route }) => {
         setBooking(data.data);
       }
     } catch (error) {
-      console.log('Error fetching booking:', error);
+      console.log('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -62,19 +62,19 @@ const QRScannerScreen = ({ navigation, route }) => {
         setBooking(data.data[0]);
       }
     } catch (error) {
-      console.log('Error fetching missions:', error);
+      console.log('Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleBarCodeScanned = async ({ type, data }) => {
-    if (scanned || scanning) return;
+    if (scanned || verifying) return;
     
     setScanned(true);
-    setScanning(true);
+    setVerifying(true);
     
-    console.log('QR scanned:', data);
+    console.log('QR Scanned:', data);
     
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
@@ -89,10 +89,11 @@ const QRScannerScreen = ({ navigation, route }) => {
       });
       
       const result = await response.json();
+      console.log('Result:', result);
       
       if (result.success) {
         Alert.alert(
-          'Succès',
+          '✅ Succès',
           'QR code validé ! Service démarré.',
           [
             {
@@ -102,21 +103,21 @@ const QRScannerScreen = ({ navigation, route }) => {
           ]
         );
       } else {
-        Alert.alert('Erreur', result.message || 'QR code invalide');
+        Alert.alert('❌ Erreur', result.message || 'QR code invalide');
         setScanned(false);
-        setScanning(false);
       }
     } catch (error) {
-      console.log('Error verifying QR:', error);
+      console.log('Error:', error);
       Alert.alert('Erreur', 'Impossible de vérifier le QR code');
       setScanned(false);
-      setScanning(false);
+    } finally {
+      setVerifying(false);
     }
   };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   };
 
   if (!permission) {
@@ -210,25 +211,19 @@ const QRScannerScreen = ({ navigation, route }) => {
         <View style={styles.overlayBottom} />
       </View>
 
-      {/* Content Layer */}
+      {/* Content */}
       <SafeAreaView style={styles.contentLayer}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Scanner QR Client</Text>
+          <Text style={styles.headerTitle}>Scanner QR</Text>
           <View style={styles.placeholder} />
         </View>
 
-        <Text style={styles.instructionText}>Pointez la caméra vers le QR du client</Text>
+        <Text style={styles.instructionText}>Placez le QR code dans le cadre</Text>
 
-        {/* Bottom Info Card */}
         <View style={styles.infoCard}>
-          <View style={styles.missionLabelContainer}>
-            <View style={styles.pulseDot} />
-            <Text style={styles.missionLabel}>Mission à démarrer</Text>
-          </View>
-
           <View style={styles.clientRow}>
             <View style={styles.clientAvatar}>
               <Text style={styles.avatarText}>{booking.client_name?.charAt(0) || 'C'}</Text>
@@ -236,26 +231,23 @@ const QRScannerScreen = ({ navigation, route }) => {
             <View style={styles.clientInfo}>
               <Text style={styles.clientName}>{booking.client_name || 'Client'}</Text>
               <Text style={styles.missionDetails}>
-                {booking.category_name || 'Service'} — {formatDate(booking.booking_date)}
+                {booking.category_name} — {formatDate(booking.booking_date)} • {booking.time_slot}
               </Text>
             </View>
-            <Text style={styles.priceText}>{booking.agreed_price || 0} MAD</Text>
           </View>
 
-          {scanned && !scanning && (
-            <TouchableOpacity 
-              style={styles.rescanButton} 
-              onPress={() => setScanned(false)}
-            >
-              <Text style={styles.rescanButtonText}>Scanner à nouveau</Text>
-            </TouchableOpacity>
+          {verifying && (
+            <View style={styles.verifyingContainer}>
+              <ActivityIndicator size="small" color="#1A73E8" />
+              <Text style={styles.verifyingText}>Vérification en cours...</Text>
+            </View>
           )}
 
-          {scanning && (
-            <View style={styles.scanningContainer}>
-              <ActivityIndicator size="small" color="#1A73E8" />
-              <Text style={styles.scanningText}>Vérification...</Text>
-            </View>
+          {scanned && !verifying && (
+            <TouchableOpacity style={styles.rescanButton} onPress={() => setScanned(false)}>
+              <Ionicons name="refresh" size={20} color="#FFFFFF" />
+              <Text style={styles.rescanButtonText}>Scanner à nouveau</Text>
+            </TouchableOpacity>
           )}
         </View>
       </SafeAreaView>
@@ -264,50 +256,46 @@ const QRScannerScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
-  loadingText: { marginTop: 12, fontSize: 16, color: '#FFFFFF' },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#FFF' },
   permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: '#000' },
-  permissionTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginTop: 20, marginBottom: 10 },
+  permissionTitle: { fontSize: 20, fontWeight: '700', color: '#FFF', marginTop: 20, marginBottom: 10 },
   permissionText: { fontSize: 14, color: '#94A3B8', textAlign: 'center', marginBottom: 30 },
   permissionButton: { backgroundColor: '#1A73E8', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  permissionButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  permissionButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  overlayTop: { flex: 1, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)' },
+  overlayTop: { flex: 1, width: '100%', backgroundColor: 'rgba(0,0,0,0.7)' },
   overlayRow: { flexDirection: 'row', height: 260 },
-  overlaySide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  overlaySide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' },
   scanArea: { width: 260, height: 260, backgroundColor: 'transparent', position: 'relative' },
-  overlayBottom: { flex: 1.5, width: '100%', backgroundColor: 'rgba(0,0,0,0.6)' },
-  corner: { position: 'absolute', width: 40, height: 40, borderColor: '#FFFFFF' },
+  overlayBottom: { flex: 1.5, width: '100%', backgroundColor: 'rgba(0,0,0,0.7)' },
+  corner: { position: 'absolute', width: 40, height: 40, borderColor: '#FFF' },
   topLeft: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 20 },
   topRight: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 20 },
   bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 20 },
   bottomRight: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 20 },
-  contentLayer: { flex: 1, justifyContent: 'space-between' },
+  contentLayer: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 50 },
   backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFF' },
   placeholder: { width: 44 },
-  instructionText: { color: '#FFFFFF', textAlign: 'center', marginTop: 20, fontSize: 16, opacity: 0.9 },
+  instructionText: { color: '#FFF', textAlign: 'center', marginTop: 20, fontSize: 16 },
   noMissionContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  noMissionText: { color: '#FFFFFF', fontSize: 18, marginTop: 20, textAlign: 'center' },
+  noMissionText: { color: '#FFF', fontSize: 18, marginTop: 20, textAlign: 'center' },
   refreshButton: { marginTop: 20, backgroundColor: '#1A73E8', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  refreshButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  infoCard: { backgroundColor: '#FFFFFF', borderRadius: 28, padding: 24, margin: 20, marginBottom: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
-  missionLabelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 8 },
-  missionLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 },
-  clientRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  clientAvatar: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 16, fontWeight: '700', color: '#1A73E8' },
-  clientInfo: { flex: 1, marginLeft: 12 },
-  clientName: { fontSize: 18, fontWeight: '800', color: '#191C23' },
+  refreshButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  infoCard: { backgroundColor: '#FFF', borderRadius: 28, padding: 20, margin: 20, marginBottom: 30 },
+  clientRow: { flexDirection: 'row', alignItems: 'center' },
+  clientAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F0F7FF', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 18, fontWeight: '700', color: '#1A73E8' },
+  clientInfo: { marginLeft: 12, flex: 1 },
+  clientName: { fontSize: 16, fontWeight: '700', color: '#191C23' },
   missionDetails: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  priceText: { fontSize: 18, fontWeight: '800', color: '#1A73E8' },
-  rescanButton: { backgroundColor: '#1A73E8', height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  rescanButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  scanningContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, height: 50 },
-  scanningText: { fontSize: 14, color: '#64748B' },
+  verifyingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16, gap: 12, paddingVertical: 12 },
+  verifyingText: { fontSize: 14, color: '#64748B' },
+  rescanButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A73E8', height: 50, borderRadius: 16, marginTop: 16, gap: 8 },
+  rescanButtonText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 });
 
 export default QRScannerScreen;

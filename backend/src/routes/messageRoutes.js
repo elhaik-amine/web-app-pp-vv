@@ -1,9 +1,9 @@
 const express = require('express');
-const router = express.Router({ mergeParams: true }); // mergeParams gives access to :bookingId from parent
-const { getMessages, sendMessage } = require('../controllers/messageController');
-const { protect, restricted } = require('../middlewares/authMiddleware');
+const router = express.Router({ mergeParams: true });
+const { getMessages } = require('../controllers/messageController');
+const { protect } = require('../middlewares/authMiddleware');
 
-router.get('/',  protect, restricted, getMessages);
-router.post('/', protect, restricted, sendMessage);
+router.use(protect);
+router.get('/', getMessages);
 
 module.exports = router;

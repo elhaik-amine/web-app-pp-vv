@@ -58,6 +58,12 @@ const NotificationsScreen = ({ navigation }) => {
     
     notifList.forEach(notif => {
       const notifDate = new Date(notif.created_at).toDateString();
+      let parsedData = {};
+      try {
+        parsedData = typeof notif.data === 'string' ? JSON.parse(notif.data) : (notif.data || {});
+      } catch (_) {
+        parsedData = {};
+      }
       const formattedNotif = {
         id: notif.id,
         title: notif.title,
@@ -65,7 +71,7 @@ const NotificationsScreen = ({ navigation }) => {
         time: new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         type: notif.type,
         is_read: notif.is_read === 1,
-        data: notif.data ? JSON.parse(notif.data) : {},
+        data: parsedData,
       };
       
       if (notifDate === todayDate) {
@@ -93,7 +99,7 @@ const NotificationsScreen = ({ navigation }) => {
       const data = await response.json();
       
       if (data.success) {
-        fetchNotifications(); // Refresh list
+        fetchNotifications();
       }
     } catch (error) {
       console.log('Error marking as read:', error);
@@ -115,7 +121,7 @@ const NotificationsScreen = ({ navigation }) => {
       const data = await response.json();
       
       if (data.success) {
-        fetchNotifications(); // Refresh list
+        fetchNotifications();
         Alert.alert('Succès', 'Toutes les notifications ont été marquées comme lues');
       }
     } catch (error) {
@@ -130,6 +136,9 @@ const NotificationsScreen = ({ navigation }) => {
 
   const getIconAndColor = (type) => {
     const icons = {
+      'PRICE_ACCEPTED': { icon: 'checkmark-circle', color: '#10B981', name: 'ios' },
+'PRICE_ACCEPTED_BOTH': { icon: 'checkmark-done-circle', color: '#10B981', name: 'ios' },
+'PRICE_REJECTED': { icon: 'close-circle', color: '#EF4444', name: 'ios' },
       'BOOKING_CONFIRMED': { icon: 'checkmark-circle', color: '#10B981', name: 'ios' },
       'BOOKING_PENDING': { icon: 'time-outline', color: '#F97316', name: 'ios' },
       'BOOKING_CANCELLED': { icon: 'close-circle', color: '#EF4444', name: 'ios' },
@@ -139,37 +148,44 @@ const NotificationsScreen = ({ navigation }) => {
       'TOKEN': { icon: 'toll', color: '#FFB300', name: 'material' },
       'REVIEW': { icon: 'star', color: '#FFB300', name: 'ios' },
       'WARNING': { icon: 'alert-circle', color: '#F97316', name: 'ios' },
+      'OFFER_REJECTED': { icon: 'close-circle', color: '#EF4444', name: 'ios' },
+      'PRICE_AGREED': { icon: 'checkmark-circle', color: '#10B981', name: 'ios' },
     };
     return icons[type] || { icon: 'notifications', color: '#64748B', name: 'ios' };
   };
 
   const handleNotificationPress = (item) => {
-    if (!item.is_read) {
-      markAsRead(item.id);
-    }
-    
-    // Navigate based on notification type
-    switch (item.type) {
-      case 'BOOKING_CONFIRMED':
-      case 'BOOKING_PENDING':
-      case 'BOOKING_CANCELLED':
-      case 'BOOKING_COMPLETED':
-        navigation.navigate('BookingDetail', { bookingId: item.data?.booking_id });
-        break;
-      case 'MESSAGE':
-      case 'NEGOTIATION':
-        navigation.navigate('Negociation', { bookingId: item.data?.booking_id });
-        break;
-      case 'TOKEN':
-        navigation.navigate('WalletTokens');
-        break;
-      case 'REVIEW':
-        navigation.navigate('Avis', { bookingId: item.data?.booking_id });
-        break;
-      default:
-        break;
-    }
-  };
+  if (!item.is_read) {
+    markAsRead(item.id);
+  }
+  
+  // Navigate based on notification type
+  switch (item.type) {
+    case 'BOOKING_CONFIRMED':
+    case 'BOOKING_PENDING':
+    case 'BOOKING_CANCELLED':
+    case 'BOOKING_COMPLETED':
+      navigation.navigate('BookingDetail', { bookingId: item.data?.booking_id });
+      break;
+    case 'NEGOTIATION':
+    case 'MESSAGE':
+    case 'OFFER_REJECTED':
+    case 'PRICE_AGREED':
+    case 'PRICE_ACCEPTED':
+    case 'PRICE_ACCEPTED_BOTH':
+    case 'PRICE_REJECTED':
+      navigation.navigate('Negociation', { bookingId: item.data?.booking_id });
+      break;
+    case 'TOKEN':
+      navigation.navigate('WalletTokens');
+      break;
+    case 'REVIEW':
+      navigation.navigate('Avis', { bookingId: item.data?.booking_id });
+      break;
+    default:
+      break;
+  }
+};
 
   const NotificationItem = ({ item }) => {
     const { icon, color, name } = getIconAndColor(item.type);

@@ -14,28 +14,72 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { io } from 'socket.io-client';
 
 const { width } = Dimensions.get('window');
 
 const ProviderDashboard = ({ navigation }) => {
   const [provider, setProvider] = useState(null);
-  const [bookings, setBookings] = useState([]);
+  const [pendingBookings, setPendingBookings] = useState([]);
+  const [confirmedBookings, setConfirmedBookings] = useState([]);
   const [tokenBalance, setTokenBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('demandes');
+  const [socket, setSocket] = useState(null);
   const [stats, setStats] = useState({
     missions: 0,
     rating: 0,
-    successRate: 0,
+    successRate: 98,
   });
 
   const API_URL = 'http://192.168.1.10:5000/api';
+  const SOCKET_URL = 'http://192.168.1.10:5000';
 
   useEffect(() => {
     loadProviderData();
-    fetchBookings();
+    fetchPendingBookings();
+    fetchConfirmedBookings();
     fetchTokenBalance();
+    initSocket();
   }, []);
+
+  const initSocket = async () => {
+    const token = await AsyncStorage.getItem('khidmati_token');
+    const userData = await AsyncStorage.getItem('khidmati_user');
+    if (userData && token) {
+      const user = JSON.parse(userData);
+      const newSocket = io(SOCKET_URL, { transports: ['websocket'] });
+      
+      newSocket.on('connect', () => {
+        newSocket.emit('join', user.id);
+        newSocket.emit('join:provider', user.id);
+      });
+      
+      newSocket.on('booking:new', () => {
+        fetchPendingBookings();
+        fetchConfirmedBookings();
+      });
+      
+      newSocket.on('booking:updated', () => {
+        fetchPendingBookings();
+        fetchConfirmedBookings();
+      });
+      
+      newSocket.on('booking:confirmed', () => {
+        fetchPendingBookings();
+        fetchConfirmedBookings();
+        Alert.alert('Succès', `Une réservation a été confirmée !`);
+      });
+      
+      newSocket.on('booking:price_updated', () => {
+        fetchPendingBookings();
+        fetchConfirmedBookings();
+      });
+      
+      setSocket(newSocket);
+    }
+  };
 
   const loadProviderData = async () => {
     try {
@@ -44,7 +88,6 @@ const ProviderDashboard = ({ navigation }) => {
         const user = JSON.parse(userData);
         setProvider(user);
         
-        // Fetch provider profile
         const token = await AsyncStorage.getItem('khidmati_token');
         const response = await fetch(`${API_URL}/providers/${user.id}`, {
           headers: { 'Authorization': `Bearer ${token}` },
@@ -63,7 +106,7 @@ const ProviderDashboard = ({ navigation }) => {
     }
   };
 
-  const fetchBookings = async () => {
+  const fetchPendingBookings = async () => {
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
       const response = await fetch(`${API_URL}/bookings?status=PENDING`, {
@@ -71,13 +114,25 @@ const ProviderDashboard = ({ navigation }) => {
       });
       const data = await response.json();
       if (data.success) {
-        setBookings(data.data);
+        setPendingBookings(data.data);
       }
     } catch (error) {
-      console.log('Error fetching bookings:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      console.log('Error fetching pending bookings:', error);
+    }
+  };
+
+  const fetchConfirmedBookings = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const response = await fetch(`${API_URL}/bookings?status=CONFIRMED`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setConfirmedBookings(data.data);
+      }
+    } catch (error) {
+      console.log('Error fetching confirmed bookings:', error);
     }
   };
 
@@ -93,84 +148,125 @@ const ProviderDashboard = ({ navigation }) => {
       }
     } catch (error) {
       console.log('Error fetching token balance:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const acceptBooking = async (bookingId) => {
-  try {
-    const token = await AsyncStorage.getItem('khidmati_token');
-    
-    // Use the correct endpoint: /confirm (not /accept)
-    const response = await fetch(`${API_URL}/bookings/${bookingId}/confirm`, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    const data = await response.json();
-    console.log('Accept response:', data);
-    
-    if (data.success) {
-      Alert.alert('Succès', 'Réservation acceptée');
-      fetchBookings(); // Refresh the list
-    } else {
-      Alert.alert('Erreur', data.message || 'Erreur lors de l\'acceptation');
-    }
-  } catch (error) {
-    console.log('Error accepting booking:', error);
-    Alert.alert('Erreur', 'Impossible d\'accepter la réservation');
-  }
-};
-
-  const rejectBooking = async (bookingId) => {
-    Alert.alert(
-      'Refuser la réservation',
-      'Voulez-vous vraiment refuser cette réservation ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Refuser',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('khidmati_token');
-              const response = await fetch(`${API_URL}/bookings/${bookingId}/reject`, {
-                method: 'PATCH',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-              const data = await response.json();
-              if (data.success) {
-                Alert.alert('Succès', 'Réservation refusée');
-                fetchBookings();
-              } else {
-                Alert.alert('Erreur', data.message);
-              }
-            } catch (error) {
-              console.log('Error rejecting booking:', error);
-            }
-          },
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const response = await fetch(`${API_URL}/bookings/${bookingId}/confirm`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      ]
-    );
+      });
+      const data = await response.json();
+      if (data.success) {
+        Alert.alert('Succès', 'Réservation acceptée');
+        fetchPendingBookings();
+        fetchConfirmedBookings();
+      } else {
+        Alert.alert('Erreur', data.message);
+      }
+    } catch (error) {
+      console.log('Error accepting booking:', error);
+    }
   };
 
   const onRefresh = () => {
     setRefreshing(true);
     loadProviderData();
-    fetchBookings();
+    fetchPendingBookings();
+    fetchConfirmedBookings();
     fetchTokenBalance();
   };
 
+  const getLatestPrice = (booking) => {
+    if (booking.agreed_price && booking.agreed_price > 0) return booking.agreed_price;
+    if (booking.estimated_price && booking.estimated_price > 0) return booking.estimated_price;
+    return 0;
+  };
+
   const statsCards = [
-    { id: '1', label: 'Missions', value: stats.missions.toString(), icon: 'assignment' },
+    { id: '1', label: 'Missions', value: stats.missions.toString(), icon: 'briefcase' },
     { id: '2', label: 'Note', value: `${stats.rating} ⭐`, icon: 'star' },
     { id: '3', label: 'Taux succès', value: `${stats.successRate}%`, icon: 'trending-up' },
   ];
+
+  const renderBookingCard = (item, isPending = true) => {
+    const price = getLatestPrice(item);
+    const isConfirmed = item.status === 'CONFIRMED';
+    
+    return (
+      <View key={item.id} style={styles.requestCard}>
+        <View style={styles.requestTop}>
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarInitial}>{item.client_name?.charAt(0) || 'C'}</Text>
+          </View>
+          <View style={styles.requestInfo}>
+            <Text style={styles.clientName}>{item.client_name || 'Client'}</Text>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{item.category_name || 'Service'}</Text>
+            </View>
+          </View>
+          <Text style={[styles.requestPrice, price === 0 && styles.priceZero]}>
+            {price > 0 ? `${price} MAD` : 'À négocier'}
+          </Text>
+        </View>
+
+        <View style={styles.requestMiddle}>
+          <View style={styles.dateTimeItem}>
+            <Ionicons name="calendar-outline" size={16} color="#64748B" />
+            <Text style={styles.dateTimeText}>
+              {new Date(item.booking_date).toLocaleDateString()}
+            </Text>
+          </View>
+          <View style={styles.dateTimeItem}>
+            <Ionicons name="time-outline" size={16} color="#64748B" />
+            <Text style={styles.dateTimeText}>{item.time_slot || 'Flexible'}</Text>
+          </View>
+        </View>
+
+        {isPending && !isConfirmed && (
+          <View style={styles.requestActions}>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.negotiateBtn]}
+              onPress={() => navigation.navigate('Negociation', { bookingId: item.id })}
+            >
+              <Text style={styles.negotiateText}>Négocier</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.acceptBtn]}
+              onPress={() => acceptBooking(item.id)}
+            >
+              <Text style={styles.acceptText}>Accepter</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {!isPending && (
+          <TouchableOpacity 
+            style={styles.viewDetailsBtn}
+            onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })}
+          >
+            <Text style={styles.viewDetailsText}>Voir détails</Text>
+            <Ionicons name="chevron-forward" size={16} color="#1A73E8" />
+          </TouchableOpacity>
+        )}
+        
+        {isConfirmed && (
+          <View style={styles.confirmedBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+            <Text style={styles.confirmedText}>Confirmé</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -217,7 +313,7 @@ const ProviderDashboard = ({ navigation }) => {
         <View style={styles.tokenCard}>
           <View style={styles.tokenHeader}>
             <View style={styles.tokenLabelGroup}>
-              <Ionicons name="cash-outline" size={28} color="#FFFFFF" />
+              <MaterialCommunityIcons name="ticket" size={28} color="#FFFFFF" />
               <Text style={styles.tokenTitle}>Mes Tokens</Text>
             </View>
             <TouchableOpacity 
@@ -253,429 +349,145 @@ const ProviderDashboard = ({ navigation }) => {
           ))}
         </View>
 
-        {/* New Requests Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nouvelles Demandes</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAll}>Voir tout</Text>
-            </TouchableOpacity>
-          </View>
-
-          {bookings.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="inbox-outline" size={48} color="#CBD5E1" />
-              <Text style={styles.emptyText}>Aucune nouvelle demande</Text>
-            </View>
-          ) : (
-            bookings.map((booking) => (
-              <View key={booking.id} style={styles.requestCard}>
-                <View style={styles.requestTop}>
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarInitial}>{booking.client_name?.charAt(0) || 'C'}</Text>
-                  </View>
-                  <View style={styles.requestInfo}>
-                    <Text style={styles.clientName}>{booking.client_name || 'Client'}</Text>
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryText}>{booking.category_name || 'Service'}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.requestPrice}>{booking.agreed_price || booking.estimated_price || 0} MAD</Text>
-                </View>
-
-                <View style={styles.requestMiddle}>
-                  <View style={styles.dateTimeItem}>
-                    <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                    <Text style={styles.dateTimeText}>
-                      {new Date(booking.booking_date).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <View style={styles.dateTimeItem}>
-                    <Ionicons name="time-outline" size={16} color="#64748B" />
-                    <Text style={styles.dateTimeText}>{booking.time_slot || 'Flexible'}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.requestActions}>
-                  <TouchableOpacity 
-  style={[styles.actionBtn, styles.negotiateBtn]}
-  onPress={() => navigation.navigate('Negociation', { bookingId: booking.id })}
->
-  <Text style={styles.negotiateText}>Négocier</Text>
-</TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, styles.acceptBtn]}
-                    onPress={() => acceptBooking(booking.id)}
-                  >
-                    <Text style={styles.acceptText}>Accepter</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
+        {/* Tabs */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'demandes' && styles.tabActive]}
+            onPress={() => setActiveTab('demandes')}
+          >
+            <Text style={[styles.tabText, activeTab === 'demandes' && styles.tabTextActive]}>
+              Nouvelles Demandes ({pendingBookings.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'missions' && styles.tabActive]}
+            onPress={() => setActiveTab('missions')}
+          >
+            <Text style={[styles.tabText, activeTab === 'missions' && styles.tabTextActive]}>
+              Mes Missions ({confirmedBookings.length})
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Content based on active tab */}
+        {activeTab === 'demandes' && (
+          <>
+            {pendingBookings.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="inbox-outline" size={48} color="#CBD5E1" />
+                <Text style={styles.emptyText}>Aucune nouvelle demande</Text>
+              </View>
+            ) : (
+              pendingBookings.map((booking) => renderBookingCard(booking, true))
+            )}
+          </>
+        )}
+
+        {activeTab === 'missions' && (
+          <>
+            {confirmedBookings.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
+                <Text style={styles.emptyText}>Aucune mission en cours</Text>
+              </View>
+            ) : (
+              confirmedBookings.map((booking) => renderBookingCard(booking, false))
+            )}
+          </>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
       {/* Bottom Nav */}
-      {/* Bottom Nav */}
-<View style={styles.bottomNav}>
-  <TouchableOpacity style={styles.navItemActive} onPress={() => setActiveTab('home')}>
-    <Ionicons name="home" size={24} color="#1A73E8" />
-    <Text style={[styles.navLabel, styles.navLabelActive]}>Accueil</Text>
-  </TouchableOpacity>
-  
-  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('MesReservations')}>
-    <Ionicons name="calendar" size={24} color="#94A3B8" />
-    <Text style={styles.navLabel}>Missions</Text>
-  </TouchableOpacity>
-  
-  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('QRScanner')}>
-    <Ionicons name="scan" size={24} color="#94A3B8" />
-    <Text style={styles.navLabel}>Scanner</Text>
-  </TouchableOpacity>
-  
-  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Profil')}>
-    <Ionicons name="person-outline" size={24} color="#94A3B8" />
-    <Text style={styles.navLabel}>Profil</Text>
-  </TouchableOpacity>
-</View>
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItemActive} onPress={() => navigation.replace('ProviderDashboard')}>
+          <Ionicons name="home" size={24} color="#1A73E8" />
+          <Text style={[styles.navLabel, styles.navLabelActive]}>Accueil</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('MesReservations')}>
+          <Ionicons name="calendar" size={24} color="#94A3B8" />
+          <Text style={styles.navLabel}>Missions</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('QRScanner')}>
+          <Ionicons name="scan" size={24} color="#94A3B8" />
+          <Text style={styles.navLabel}>Scanner</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Profil')}>
+          <Ionicons name="person-outline" size={24} color="#94A3B8" />
+          <Text style={styles.navLabel}>Profil</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#64748B',
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 100,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-  },
-  greetingContainer: {
-    marginLeft: 12,
-  },
-  greetingText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#191C23',
-  },
-  subGreeting: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  iconBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  unreadDot: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
-    borderWidth: 2,
-    borderColor: '#F8FAFC',
-  },
-  tokenCard: {
-    backgroundColor: '#1A73E8',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: '#1A73E8',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  tokenHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  tokenLabelGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tokenTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  buyBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  buyBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  tokenBalance: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  tokenUnit: {
-    fontSize: 16,
-    fontWeight: '600',
-    opacity: 0.8,
-  },
-  tokenFooter: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    paddingTop: 16,
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  warningBoxDanger: {
-    backgroundColor: 'rgba(255, 68, 68, 0.2)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  warningText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    marginLeft: 6,
-  },
-  warningTextDanger: {
-    color: '#FF8888',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-  },
-  statCard: {
-    width: '30%',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 20,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#191C23',
-    marginTop: 8,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#191C23',
-  },
-  seeAll: {
-    color: '#1A73E8',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#94A3B8',
-    marginTop: 12,
-  },
-  requestCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  requestTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#F0F7FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A73E8',
-  },
-  requestInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#191C23',
-    marginBottom: 4,
-  },
-  categoryBadge: {
-    backgroundColor: '#F0F7FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1A73E8',
-  },
-  requestPrice: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1A73E8',
-  },
-  requestMiddle: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 20,
-  },
-  dateTimeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  dateTimeText: {
-    fontSize: 13,
-    color: '#64748B',
-    marginLeft: 6,
-  },
-  requestActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionBtn: {
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '48%',
-  },
-  negotiateBtn: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-  },
-  negotiateText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A73E8',
-  },
-  acceptBtn: {
-    backgroundColor: '#10B981',
-  },
-  acceptText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  bottomSpacer: {
-    height: 20,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 84,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navItemActive: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 4,
-  },
-  navLabelActive: {
-    fontSize: 10,
-    color: '#1A73E8',
-    fontWeight: '700',
-    marginTop: 4,
-  },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#64748B' },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  userInfo: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#F1F5F9' },
+  greetingContainer: { marginLeft: 12 },
+  greetingText: { fontSize: 18, fontWeight: '800', color: '#191C23' },
+  subGreeting: { fontSize: 12, color: '#64748B' },
+  iconBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  unreadDot: { position: 'absolute', top: 14, right: 14, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#F8FAFC' },
+  tokenCard: { backgroundColor: '#1A73E8', borderRadius: 24, padding: 24, marginBottom: 24, shadowColor: '#1A73E8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  tokenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  tokenLabelGroup: { flexDirection: 'row', alignItems: 'center' },
+  tokenTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  buyBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 },
+  buyBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  tokenBalance: { fontSize: 32, fontWeight: '800', color: '#FFFFFF', marginBottom: 16 },
+  tokenUnit: { fontSize: 16, fontWeight: '600', opacity: 0.8 },
+  tokenFooter: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 16 },
+  warningBox: { flexDirection: 'row', alignItems: 'center' },
+  warningBoxDanger: { backgroundColor: 'rgba(255,68,68,0.2)', padding: 8, borderRadius: 8 },
+  warningText: { color: '#FFFFFF', fontSize: 12, marginLeft: 6 },
+  warningTextDanger: { color: '#FF8888' },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
+  statCard: { width: '30%', backgroundColor: '#F8FAFC', borderRadius: 20, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  statValue: { fontSize: 16, fontWeight: '800', color: '#191C23', marginTop: 8, marginBottom: 2 },
+  statLabel: { fontSize: 11, color: '#94A3B8' },
+  tabContainer: { flexDirection: 'row', marginBottom: 20, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 4 },
+  tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  tabActive: { backgroundColor: '#1A73E8' },
+  tabText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  tabTextActive: { color: '#FFFFFF' },
+  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
+  emptyText: { fontSize: 14, color: '#94A3B8', marginTop: 12 },
+  requestCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 },
+  requestTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  avatarPlaceholder: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#F0F7FF', alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { fontSize: 20, fontWeight: '700', color: '#1A73E8' },
+  requestInfo: { flex: 1, marginLeft: 12 },
+  clientName: { fontSize: 16, fontWeight: '700', color: '#191C23', marginBottom: 4 },
+  categoryBadge: { backgroundColor: '#F0F7FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' },
+  categoryText: { fontSize: 10, fontWeight: '700', color: '#1A73E8' },
+  requestPrice: { fontSize: 18, fontWeight: '800', color: '#1A73E8' },
+  priceZero: { color: '#F97316', fontSize: 14 },
+  requestMiddle: { flexDirection: 'row', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 16, marginBottom: 20 },
+  dateTimeItem: { flexDirection: 'row', alignItems: 'center', marginRight: 20 },
+  dateTimeText: { fontSize: 13, color: '#64748B', marginLeft: 6 },
+  requestActions: { flexDirection: 'row', justifyContent: 'space-between' },
+  actionBtn: { height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', width: '48%' },
+  negotiateBtn: { borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF' },
+  negotiateText: { fontSize: 14, fontWeight: '700', color: '#1A73E8' },
+  acceptBtn: { backgroundColor: '#10B981' },
+  acceptText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  viewDetailsText: { fontSize: 14, fontWeight: '700', color: '#1A73E8', marginRight: 4 },
+  confirmedBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 12, marginTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  confirmedText: { fontSize: 14, fontWeight: '600', color: '#10B981', marginLeft: 6 },
+  bottomSpacer: { height: 20 },
+  bottomNav: { position: 'absolute', bottom: 0, width: '100%', height: 84, backgroundColor: '#FFFFFF', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingBottom: 20, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  navItem: { alignItems: 'center', justifyContent: 'center' },
+  navItemActive: { alignItems: 'center', justifyContent: 'center' },
+  navLabel: { fontSize: 10, color: '#94A3B8', marginTop: 4 },
+  navLabelActive: { color: '#1A73E8', fontWeight: '700' },
 });
 
 export default ProviderDashboard;

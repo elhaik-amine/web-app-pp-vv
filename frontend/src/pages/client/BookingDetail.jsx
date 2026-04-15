@@ -143,12 +143,6 @@ const BookingDetailScreen = ({ navigation, route }) => {
     );
   };
 
-  const callClient = () => {
-    if (booking?.client_phone) {
-      Linking.openURL(`tel:${booking.client_phone}`);
-    }
-  };
-
   const getStatusStyles = (status) => {
     switch (status) {
       case 'CONFIRMED': return { bg: '#DCFCE7', text: '#166534', label: 'CONFIRMÉ' };
@@ -209,6 +203,8 @@ const BookingDetailScreen = ({ navigation, route }) => {
   const statusStyle = getStatusStyles(booking.status);
   const steps = getSteps(booking.status);
   const showContactInfo = (booking.status === 'CONFIRMED' || booking.status === 'IN_PROGRESS');
+  const isConfirmed = booking.status === 'CONFIRMED';
+  const isPending = booking.status === 'PENDING';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -250,7 +246,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
 
           {/* Phone badge - for PROVIDERS only when booking is confirmed or in progress */}
           {userRole === 'PROVIDER' && showContactInfo && booking.client_phone && (
-            <TouchableOpacity style={styles.contactRow} onPress={callClient}>
+            <TouchableOpacity style={styles.contactRow} onPress={() => Linking.openURL(`tel:${booking.client_phone}`)}>
               <View style={styles.phoneBadge}>
                 <Ionicons name="call-outline" size={16} color="#10B981" />
                 <Text style={styles.phoneText}>Contacter le client: {booking.client_phone}</Text>
@@ -284,27 +280,37 @@ const BookingDetailScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* QR/Scanner Button - Different for Client vs Provider */}
-        {(booking.status === 'CONFIRMED' || booking.status === 'IN_PROGRESS') && (
-          <>
-            {userRole === 'CLIENT' ? (
-              <TouchableOpacity 
-                style={styles.qrButton} 
-                onPress={() => navigation.navigate('QRCodeDisplay', { bookingId: booking.id })}
-              >
-                <Ionicons name="qr-code-outline" size={24} color="#FFFFFF" />
-                <Text style={styles.qrButtonText}>Afficher mon QR Code</Text>
-              </TouchableOpacity>
-            ) : userRole === 'PROVIDER' ? (
-              <TouchableOpacity 
-                style={styles.scannerButton} 
-                onPress={() => navigation.navigate('QRScanner', { bookingId: booking.id })}
-              >
-                <Ionicons name="scan-outline" size={24} color="#FFFFFF" />
-                <Text style={styles.scannerButtonText}>Scanner QR Client</Text>
-              </TouchableOpacity>
-            ) : null}
-          </>
+        {/* QR Code for CLIENT - Show QR to display */}
+        {userRole === 'CLIENT' && isConfirmed && (
+          <TouchableOpacity 
+            style={styles.qrButton}
+            onPress={() => navigation.navigate('QRCodeDisplay', { bookingId: booking.id })}
+          >
+            <Ionicons name="qr-code-outline" size={24} color="#FFFFFF" />
+            <Text style={styles.qrButtonText}>Afficher mon QR Code</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* QR Scanner for PROVIDER - Scan client's QR */}
+        {userRole === 'PROVIDER' && isConfirmed && (
+  <TouchableOpacity 
+    style={styles.scannerButton}
+    onPress={() => navigation.navigate('QRScanner', { bookingId: booking.id })}
+  >
+    <Ionicons name="scan-outline" size={24} color="#FFFFFF" />
+    <Text style={styles.scannerButtonText}>Scanner QR Client</Text>
+  </TouchableOpacity>
+)}
+
+        {/* Negotiation Button - ONLY for PENDING bookings (both roles) */}
+        {isPending && (
+          <TouchableOpacity 
+            style={styles.negotiateButton}
+            onPress={() => navigation.navigate('Negociation', { bookingId: booking.id })}
+          >
+            <Ionicons name="chatbubbles-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.negotiateButtonText}>Négocier le prix</Text>
+          </TouchableOpacity>
         )}
 
         {/* Timeline */}
@@ -337,7 +343,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
         {booking.status !== 'CANCELLED' && booking.status !== 'COMPLETED' && (
           <View style={styles.actionsContainer}>
             {/* Cancel button - only for PENDING status */}
-            {booking.status === 'PENDING' && (
+            {isPending && (
               <TouchableOpacity 
                 style={styles.cancelAction} 
                 onPress={cancelBooking}
@@ -407,10 +413,12 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0F7FF', padding: 16, borderRadius: 16 },
   priceLabel: { fontSize: 14, fontWeight: '600', color: '#1A73E8' },
   priceValue: { fontSize: 20, fontWeight: '800', color: '#1A73E8' },
-  qrButton: { backgroundColor: '#1A73E8', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 20, marginBottom: 32, elevation: 8 },
+  qrButton: { backgroundColor: '#1A73E8', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 20, marginBottom: 16, elevation: 4 },
   qrButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 12 },
-  scannerButton: { backgroundColor: '#10B981', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 20, marginBottom: 32, elevation: 8 },
+  scannerButton: { backgroundColor: '#10B981', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 20, marginBottom: 16, elevation: 4 },
   scannerButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 12 },
+  negotiateButton: { backgroundColor: '#F97316', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 20, marginBottom: 16, elevation: 4 },
+  negotiateButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 12 },
   section: { marginBottom: 32 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#191C23', marginBottom: 20 },
   timelineContainer: { paddingLeft: 4 },
