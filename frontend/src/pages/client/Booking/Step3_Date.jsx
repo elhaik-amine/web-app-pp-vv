@@ -23,7 +23,7 @@ const BookingStep3Screen = ({ navigation, route }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const { providerId, providerName, description, photos, proposedPrice } = route.params || {};
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   // Generate next 30 days
   const getDaysArray = () => {

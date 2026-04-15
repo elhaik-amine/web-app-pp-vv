@@ -27,7 +27,7 @@ const UserProfileScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [avatar, setAvatar] = useState(null);
 
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     fetchUserProfile();

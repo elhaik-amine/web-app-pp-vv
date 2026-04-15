@@ -25,7 +25,7 @@ const AdminDashboard = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     fetchDashboardData();

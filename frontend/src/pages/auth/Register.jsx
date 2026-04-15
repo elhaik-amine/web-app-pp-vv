@@ -27,7 +27,7 @@ const RegisterScreen = ({ navigation }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   const validateForm = () => {
     if (!fullName.trim()) {

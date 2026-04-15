@@ -42,7 +42,7 @@ const MesReservationsScreen = ({ navigation }) => {
   const [activeFilter, setActiveFilter] = useState('Toutes');
   const [userRole, setUserRole] = useState('');
 
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     loadUserRole();

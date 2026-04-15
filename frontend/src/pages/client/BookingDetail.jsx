@@ -14,7 +14,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
   const [userRole, setUserRole] = useState('');
   
   const { bookingId } = route.params || {};
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     loadUserRole();

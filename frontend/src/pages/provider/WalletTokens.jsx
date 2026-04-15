@@ -31,7 +31,7 @@ const TokenWalletScreen = ({ navigation }) => {
   const [purchasing, setPurchasing] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState(null);
 
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     fetchBalance();

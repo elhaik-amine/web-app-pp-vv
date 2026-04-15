@@ -15,7 +15,7 @@ const ProviderListScreen = ({ navigation, route }) => {
   const [activeFilter, setActiveFilter] = useState('Tous');
   
   const { categoryId, categoryName, search, city } = route.params || {};
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   const filters = ['Tous', 'Mieux notés'];
 
