@@ -2,24 +2,92 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView,
+  Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    navigation.replace('HomeClient');
+  const API_URL = 'http://192.168.1.10:5000/api';
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Try client login first (this works for admin too)
+      const response = await fetch(`${API_URL}/auth/client/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: password }),
+      });
+      
+      const data = await response.json();
+      console.log('Login response:', data);
+      
+      if (data.success) {
+        const { user, accessToken } = data.data;
+        
+        await AsyncStorage.setItem('khidmati_token', accessToken);
+        await AsyncStorage.setItem('khidmati_user', JSON.stringify(user));
+        
+        console.log('User role:', user.role);
+        
+        // Navigate based on role - CHANGE THIS LINE
+        if (user.role === 'CLIENT') {
+          navigation.replace('HomeClient');  // Changed from 'ClientTabs' to 'HomeClient'
+        } else if (user.role === 'PROVIDER') {
+          navigation.replace('ProviderDashboard');
+        } else if (user.role === 'ADMIN') {
+          navigation.replace('AdminDashboard');
+        } else {
+          Alert.alert('Erreur', 'Rôle utilisateur non reconnu');
+        }
+      } else {
+        // Try provider login as fallback
+        const providerResponse = await fetch(`${API_URL}/auth/provider/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password: password }),
+        });
+        
+        const providerData = await providerResponse.json();
+        
+        if (providerData.success) {
+          const { user, accessToken } = providerData.data;
+          
+          await AsyncStorage.setItem('khidmati_token', accessToken);
+          await AsyncStorage.setItem('khidmati_user', JSON.stringify(user));
+          
+          if (user.role === 'PROVIDER') {
+            navigation.replace('ProviderDashboard');
+          }
+        } else {
+          Alert.alert('Erreur', 'Email ou mot de passe incorrect');
+        }
+      }
+    } catch (error) {
+      console.log('Login error:', error);
+      Alert.alert('Erreur', 'Impossible de contacter le serveur');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoContainer}>
@@ -60,6 +128,7 @@ const LoginScreen = ({ navigation }) => {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!loading}
               />
             </View>
 
@@ -73,6 +142,7 @@ const LoginScreen = ({ navigation }) => {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  editable={!loading}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#64748B" />
@@ -92,8 +162,16 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-              <Text style={styles.loginButtonText}>Se connecter →</Text>
+            <TouchableOpacity 
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.loginButtonText}>Se connecter →</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -138,6 +216,7 @@ const styles = StyleSheet.create({
   checkboxLabel: { fontSize: 14, color: '#64748B' },
   forgotPassword: { fontSize: 14, fontWeight: '600', color: '#1A73E8' },
   loginButton: { height: 56, backgroundColor: '#1A73E8', borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  loginButtonDisabled: { opacity: 0.7 },
   loginButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { fontSize: 14, color: '#64748B' },

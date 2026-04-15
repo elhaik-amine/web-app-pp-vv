@@ -5,8 +5,18 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-const BookingStep2Screen = ({ navigation }) => {
+const BookingStep2Screen = ({ navigation, route }) => {
   const [proposedPrice, setProposedPrice] = useState('200');
+  const { providerId, providerName, description, photos } = route.params || {};
+
+  const handleContinue = () => {
+    const price = parseInt(proposedPrice);
+    if (isNaN(price) || price < 50) {
+      alert('Veuillez entrer un prix valide (minimum 50 MAD)');
+      return;
+    }
+    
+navigation.replace('Step3', { providerId, providerName, description, photos, proposedPrice });  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -49,7 +59,14 @@ const BookingStep2Screen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Votre prix proposé</Text>
             <Text style={styles.inputLabel}>Proposez un prix (MAD)</Text>
             <View style={styles.priceInputWrapper}>
-              <TextInput style={styles.priceInput} keyboardType="numeric" value={proposedPrice} onChangeText={setProposedPrice} placeholder="0" placeholderTextColor="#94A3B8" />
+              <TextInput 
+                style={styles.priceInput} 
+                keyboardType="numeric" 
+                value={proposedPrice} 
+                onChangeText={setProposedPrice} 
+                placeholder="0" 
+                placeholderTextColor="#94A3B8" 
+              />
               <Text style={styles.currencyLabel}>MAD</Text>
             </View>
             <Text style={styles.helperText}>Le prestataire pourra négocier ce prix</Text>
@@ -68,7 +85,7 @@ const BookingStep2Screen = ({ navigation }) => {
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.continueButton} onPress={() => navigation.navigate('Step3')}>
+          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
             <Text style={styles.continueButtonText}>Continuer →</Text>
           </TouchableOpacity>
         </View>
@@ -108,7 +125,7 @@ const styles = StyleSheet.create({
   adviceText: { flex: 1, fontSize: 13, color: '#9A3412', lineHeight: 20 },
   adviceHighlight: { fontWeight: '800' },
   bottomSpacer: { height: 100 },
-  footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 34 : 24, paddingTop: 16, backgroundColor: '#FFFFFF' },
+  footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 34 : 24, paddingTop: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   continueButton: { backgroundColor: '#1A73E8', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 8 },
   continueButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });

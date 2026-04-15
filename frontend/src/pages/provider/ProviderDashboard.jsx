@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,52 +8,199 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  RefreshControl,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-const stats = [
-  { id: '1', label: 'Missions', value: '12', icon: 'assignment' },
-  { id: '2', label: 'Note', value: '4.9 ⭐', icon: 'star' },
-  { id: '3', label: 'Taux succès', value: '98%', icon: 'trending-up' },
-];
-
-const requests = [
-  {
-    id: '1',
-    clientName: 'Karim M.',
-    category: 'Plomberie',
-    date: '15 Oct',
-    time: '12:00-15:00',
-    price: '230 MAD',
-    avatar: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?q=80&w=100&auto=format&fit=crop',
-  },
-  {
-    id: '2',
-    clientName: 'Sara L.',
-    category: 'Plomberie',
-    date: '16 Oct',
-    time: '09:00-12:00',
-    price: '180 MAD',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&auto=format&fit=crop',
-  },
-];
-
 const ProviderDashboard = ({ navigation }) => {
+  const [provider, setProvider] = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [tokenBalance, setTokenBalance] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState({
+    missions: 0,
+    rating: 0,
+    successRate: 0,
+  });
+
+  const API_URL = 'http://192.168.1.10:5000/api';
+
+  useEffect(() => {
+    loadProviderData();
+    fetchBookings();
+    fetchTokenBalance();
+  }, []);
+
+  const loadProviderData = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('khidmati_user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        setProvider(user);
+        
+        // Fetch provider profile
+        const token = await AsyncStorage.getItem('khidmati_token');
+        const response = await fetch(`${API_URL}/providers/${user.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (data.success) {
+          setStats({
+            missions: data.data.total_bookings || 0,
+            rating: data.data.rating || 0,
+            successRate: data.data.success_rate || 98,
+          });
+        }
+      }
+    } catch (error) {
+      console.log('Error loading provider:', error);
+    }
+  };
+
+  const fetchBookings = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const response = await fetch(`${API_URL}/bookings?status=PENDING`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setBookings(data.data);
+      }
+    } catch (error) {
+      console.log('Error fetching bookings:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const fetchTokenBalance = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const response = await fetch(`${API_URL}/tokens/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTokenBalance(data.data.balance);
+      }
+    } catch (error) {
+      console.log('Error fetching token balance:', error);
+    }
+  };
+
+  const acceptBooking = async (bookingId) => {
+  try {
+    const token = await AsyncStorage.getItem('khidmati_token');
+    
+    // Use the correct endpoint: /confirm (not /accept)
+    const response = await fetch(`${API_URL}/bookings/${bookingId}/confirm`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    const data = await response.json();
+    console.log('Accept response:', data);
+    
+    if (data.success) {
+      Alert.alert('Succès', 'Réservation acceptée');
+      fetchBookings(); // Refresh the list
+    } else {
+      Alert.alert('Erreur', data.message || 'Erreur lors de l\'acceptation');
+    }
+  } catch (error) {
+    console.log('Error accepting booking:', error);
+    Alert.alert('Erreur', 'Impossible d\'accepter la réservation');
+  }
+};
+
+  const rejectBooking = async (bookingId) => {
+    Alert.alert(
+      'Refuser la réservation',
+      'Voulez-vous vraiment refuser cette réservation ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Refuser',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('khidmati_token');
+              const response = await fetch(`${API_URL}/bookings/${bookingId}/reject`, {
+                method: 'PATCH',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+              const data = await response.json();
+              if (data.success) {
+                Alert.alert('Succès', 'Réservation refusée');
+                fetchBookings();
+              } else {
+                Alert.alert('Erreur', data.message);
+              }
+            } catch (error) {
+              console.log('Error rejecting booking:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadProviderData();
+    fetchBookings();
+    fetchTokenBalance();
+  };
+
+  const statsCards = [
+    { id: '1', label: 'Missions', value: stats.missions.toString(), icon: 'assignment' },
+    { id: '2', label: 'Note', value: `${stats.rating} ⭐`, icon: 'star' },
+    { id: '3', label: 'Taux succès', value: `${stats.successRate}%`, icon: 'trending-up' },
+  ];
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1A73E8" />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1A73E8']} />
+        }
+      >
         {/* Top Bar */}
         <View style={styles.header}>
           <View style={styles.userInfo}>
             <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1540560717464-578bad5d138b?q=80&w=100&auto=format&fit=crop' }} 
+              source={{ uri: provider?.avatar || 'https://randomuser.me/api/portraits/men/32.jpg' }} 
               style={styles.avatar} 
             />
             <View style={styles.greetingContainer}>
-              <Text style={styles.greetingText}>Bonjour Ahmed 👋</Text>
+              <Text style={styles.greetingText}>Bonjour {provider?.name?.split(' ')[0] || 'Ahmed'} 👋</Text>
               <Text style={styles.subGreeting}>Prêt pour de nouvelles missions ?</Text>
             </View>
           </View>
@@ -70,7 +217,7 @@ const ProviderDashboard = ({ navigation }) => {
         <View style={styles.tokenCard}>
           <View style={styles.tokenHeader}>
             <View style={styles.tokenLabelGroup}>
-              <MaterialCommunityIcons name="toll" size={28} color="#FFFFFF" />
+              <Ionicons name="cash-outline" size={28} color="#FFFFFF" />
               <Text style={styles.tokenTitle}>Mes Tokens</Text>
             </View>
             <TouchableOpacity 
@@ -81,19 +228,23 @@ const ProviderDashboard = ({ navigation }) => {
             </TouchableOpacity>
           </View>
           
-          <Text style={styles.tokenBalance}>4.5 <Text style={styles.tokenUnit}>Tokens</Text></Text>
+          <Text style={styles.tokenBalance}>
+            {tokenBalance} <Text style={styles.tokenUnit}>Tokens</Text>
+          </Text>
           
           <View style={styles.tokenFooter}>
-            <View style={styles.warningBox}>
-              <Ionicons name="alert-circle" size={16} color="#FFD700" />
-              <Text style={styles.warningText}>Token bas — Rechargez bientôt</Text>
+            <View style={[styles.warningBox, tokenBalance < 2 && styles.warningBoxDanger]}>
+              <Ionicons name="alert-circle" size={16} color={tokenBalance < 2 ? "#FF4444" : "#FFD700"} />
+              <Text style={[styles.warningText, tokenBalance < 2 && styles.warningTextDanger]}>
+                {tokenBalance < 2 ? 'Token critique — Rechargez immédiatement' : 'Token bas — Rechargez bientôt'}
+              </Text>
             </View>
           </View>
         </View>
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
-          {stats.map((stat) => (
+          {statsCards.map((stat) => (
             <View key={stat.id} style={styles.statCard}>
               <MaterialCommunityIcons name={stat.icon} size={24} color="#1A73E8" />
               <Text style={styles.statValue}>{stat.value}</Text>
@@ -111,79 +262,85 @@ const ProviderDashboard = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {requests.map((request) => (
-            <View key={request.id} style={styles.requestCard}>
-              <View style={styles.requestTop}>
-                <Image source={{ uri: request.avatar }} style={styles.clientAvatar} />
-                <View style={styles.requestInfo}>
-                  <Text style={styles.clientName}>{request.clientName}</Text>
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{request.category}</Text>
+          {bookings.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="inbox-outline" size={48} color="#CBD5E1" />
+              <Text style={styles.emptyText}>Aucune nouvelle demande</Text>
+            </View>
+          ) : (
+            bookings.map((booking) => (
+              <View key={booking.id} style={styles.requestCard}>
+                <View style={styles.requestTop}>
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitial}>{booking.client_name?.charAt(0) || 'C'}</Text>
+                  </View>
+                  <View style={styles.requestInfo}>
+                    <Text style={styles.clientName}>{booking.client_name || 'Client'}</Text>
+                    <View style={styles.categoryBadge}>
+                      <Text style={styles.categoryText}>{booking.category_name || 'Service'}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.requestPrice}>{booking.agreed_price || booking.estimated_price || 0} MAD</Text>
+                </View>
+
+                <View style={styles.requestMiddle}>
+                  <View style={styles.dateTimeItem}>
+                    <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                    <Text style={styles.dateTimeText}>
+                      {new Date(booking.booking_date).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.dateTimeItem}>
+                    <Ionicons name="time-outline" size={16} color="#64748B" />
+                    <Text style={styles.dateTimeText}>{booking.time_slot || 'Flexible'}</Text>
                   </View>
                 </View>
-                <Text style={styles.requestPrice}>{request.price}</Text>
-              </View>
 
-              <View style={styles.requestMiddle}>
-                <View style={styles.dateTimeItem}>
-                  <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                  <Text style={styles.dateTimeText}>{request.date}</Text>
-                </View>
-                <View style={styles.dateTimeItem}>
-                  <Ionicons name="time-outline" size={16} color="#64748B" />
-                  <Text style={styles.dateTimeText}>{request.time}</Text>
+                <View style={styles.requestActions}>
+                  <TouchableOpacity 
+  style={[styles.actionBtn, styles.negotiateBtn]}
+  onPress={() => navigation.navigate('Negociation', { bookingId: booking.id })}
+>
+  <Text style={styles.negotiateText}>Négocier</Text>
+</TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, styles.acceptBtn]}
+                    onPress={() => acceptBooking(booking.id)}
+                  >
+                    <Text style={styles.acceptText}>Accepter</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-
-              <View style={styles.requestActions}>
-                <TouchableOpacity 
-                  style={[styles.actionBtn, styles.negotiateBtn]}
-                  onPress={() => navigation.navigate('Negociation')}
-                >
-                  <Text style={styles.negotiateText}>Négocier</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.actionBtn, styles.acceptBtn]}
-                  onPress={() => navigation.navigate('Step1')}
-                >
-                  <Text style={styles.acceptText}>Accepter</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Bottom Nav Placeholder */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItemActive}>
-          <Ionicons name="home" size={24} color="#1A73E8" />
-          <Text style={styles.navLabelActive}>Accueil</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.navItem}
-          onPress={() => navigation.navigate('MesReservations')}
-        >
-          <Ionicons name="assignment-outline" size={24} color="#94A3B8" />
-          <Text style={styles.navLabel}>Missions</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.navItem}
-          onPress={() => navigation.navigate('QRScanner')}
-        >
-          <Ionicons name="qr-code-scanner" size={24} color="#94A3B8" />
-          <Text style={styles.navLabel}>Scanner</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.navItem}
-          onPress={() => navigation.navigate('Profil')}
-        >
-          <Ionicons name="person-outline" size={24} color="#94A3B8" />
-          <Text style={styles.navLabel}>Profil</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Bottom Nav */}
+      {/* Bottom Nav */}
+<View style={styles.bottomNav}>
+  <TouchableOpacity style={styles.navItemActive} onPress={() => setActiveTab('home')}>
+    <Ionicons name="home" size={24} color="#1A73E8" />
+    <Text style={[styles.navLabel, styles.navLabelActive]}>Accueil</Text>
+  </TouchableOpacity>
+  
+  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('MesReservations')}>
+    <Ionicons name="calendar" size={24} color="#94A3B8" />
+    <Text style={styles.navLabel}>Missions</Text>
+  </TouchableOpacity>
+  
+  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('QRScanner')}>
+    <Ionicons name="scan" size={24} color="#94A3B8" />
+    <Text style={styles.navLabel}>Scanner</Text>
+  </TouchableOpacity>
+  
+  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Profil')}>
+    <Ionicons name="person-outline" size={24} color="#94A3B8" />
+    <Text style={styles.navLabel}>Profil</Text>
+  </TouchableOpacity>
+</View>
     </SafeAreaView>
   );
 };
@@ -193,9 +350,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#64748B',
+  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 16,
+    paddingBottom: 100,
   },
   header: {
     flexDirection: 'row',
@@ -303,10 +471,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  warningBoxDanger: {
+    backgroundColor: 'rgba(255, 68, 68, 0.2)',
+    padding: 8,
+    borderRadius: 8,
+  },
   warningText: {
     color: '#FFFFFF',
     fontSize: 12,
     marginLeft: 6,
+  },
+  warningTextDanger: {
+    color: '#FF8888',
   },
   statsRow: {
     flexDirection: 'row',
@@ -352,6 +528,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginTop: 12,
+  },
   requestCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
@@ -370,11 +555,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  clientAvatar: {
+  avatarPlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F0F7FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A73E8',
   },
   requestInfo: {
     flex: 1,
@@ -450,7 +642,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   bottomSpacer: {
-    height: 100,
+    height: 20,
   },
   bottomNav: {
     position: 'absolute',

@@ -1,53 +1,136 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, FlatList, Image,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const filters = ['Tous', 'Mieux notés', 'Prix bas', 'Disponible'];
-
-const providers = [
-  { id: '1', name: 'Ahmed B.', specialty: 'Plombier Expert', rating: 4.9, reviews: 124, location: 'Casablanca, Maârif', price: 150, image: 'https://images.unsplash.com/photo-1540560717464-578bad5d138b?q=80&w=400&auto=format&fit=crop' },
-  { id: '2', name: 'Karim L.', specialty: 'Plomberie & Chauffage', rating: 4.7, reviews: 86, location: 'Casablanca, Gauthier', price: 180, image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop' },
-  { id: '3', name: 'Yassine M.', specialty: 'Installation Sanitaire', rating: 4.8, reviews: 52, location: 'Casablanca, Anfa', price: 160, image: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=400&auto=format&fit=crop' },
-  { id: '4', name: 'Omar S.', specialty: 'Dépannage Rapide', rating: 4.6, reviews: 41, location: 'Casablanca, Bourgogne', price: 140, image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=400&auto=format&fit=crop' },
-];
-
-const ProviderListScreen = ({ navigation }) => {
+const ProviderListScreen = ({ navigation, route }) => {
+  const [providers, setProviders] = useState([]);
+  const [filteredProviders, setFilteredProviders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState('Tous');
+  
+  const { categoryId, categoryName, search, city } = route.params || {};
+  const API_URL = 'http://192.168.1.10:5000/api';
+
+  const filters = ['Tous', 'Mieux notés'];
+
+  useEffect(() => {
+    fetchProviders();
+  }, []);
+
+  const fetchProviders = async () => {
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      
+      if (!token) {
+        navigation.replace('Login');
+        return;
+      }
+      
+      let url = `${API_URL}/providers`;
+      
+      const params = [];
+      if (categoryId) params.push(`category_id=${categoryId}`);
+      if (city) params.push(`city=${encodeURIComponent(city)}`);
+      if (search) params.push(`search=${encodeURIComponent(search)}`);
+      
+      if (params.length > 0) {
+        url += `?${params.join('&')}`;
+      }
+      
+      console.log('Fetching providers from:', url);
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setProviders(data.data);
+        applyFilter(activeFilter, data.data);
+      } else if (data.message === 'Not authorized, no token') {
+        navigation.replace('Login');
+      }
+    } catch (error) {
+      console.log('Error fetching providers:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const applyFilter = (filter, providerList = providers) => {
+    let filtered = [...providerList];
+    
+    if (filter === 'Mieux notés') {
+      filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+    
+    setFilteredProviders(filtered);
+  };
+
+  const handleFilterPress = (filter) => {
+    setActiveFilter(filter);
+    applyFilter(filter);
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchProviders();
+  };
 
   const renderFilterChip = ({ item }) => (
     <TouchableOpacity
       style={[styles.filterChip, activeFilter === item && styles.filterChipActive]}
-      onPress={() => setActiveFilter(item)}
+      onPress={() => handleFilterPress(item)}
     >
       <Text style={[styles.filterText, activeFilter === item && styles.filterTextActive]}>{item}</Text>
     </TouchableOpacity>
   );
 
   const renderProviderCard = ({ item }) => (
-    <TouchableOpacity style={styles.providerCard} onPress={() => navigation.navigate('ProviderProfile')}>
-      <Image source={{ uri: item.image }} style={styles.providerImage} />
+    <TouchableOpacity 
+      style={styles.providerCard} 
+      onPress={() => navigation.navigate('ProviderProfile', { providerId: item.id })}
+    >
+      <Image 
+        source={{ uri: item.avatar || 'https://randomuser.me/api/portraits/men/32.jpg' }} 
+        style={styles.providerImage} 
+      />
       <View style={styles.providerDetails}>
         <View style={styles.cardHeader}>
           <View>
             <Text style={styles.providerName}>{item.name}</Text>
-            <Text style={styles.providerSpecialty}>{item.specialty}</Text>
+            <Text style={styles.providerSpecialty}>{item.category_name || 'Prestataire'}</Text>
           </View>
           <View style={styles.ratingBadge}>
             <Ionicons name="star" size={14} color="#FFB300" />
-            <Text style={styles.ratingValue}>{item.rating}</Text>
-            <Text style={styles.reviewCount}>({item.reviews})</Text>
+            <Text style={styles.ratingValue}>{item.rating || '4.5'}</Text>
+            <Text style={styles.reviewCount}>({item.total_reviews || 0})</Text>
           </View>
         </View>
         <View style={styles.locationRow}>
           <Ionicons name="location-outline" size={16} color="#64748B" />
-          <Text style={styles.locationText}>{item.location}</Text>
+          <Text style={styles.locationText}>{item.city || 'Maroc'}</Text>
         </View>
         <View style={styles.cardFooter}>
-          <Text style={styles.priceLabel}>À partir de <Text style={styles.priceValue}>{item.price} MAD/h</Text></Text>
-          <TouchableOpacity style={styles.bookButton} onPress={() => navigation.navigate('ProviderProfile')}>
+          <Text style={styles.priceLabel}>
+            À partir de <Text style={styles.priceValue}>150 MAD/h</Text>
+          </Text>
+          <TouchableOpacity 
+            style={styles.bookButton} 
+            onPress={() => navigation.navigate('ProviderProfile', { providerId: item.id })}
+          >
             <Text style={styles.bookButtonText}>Réserver</Text>
           </TouchableOpacity>
         </View>
@@ -55,13 +138,30 @@ const ProviderListScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1A73E8" />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const canGoBack = navigation.canGoBack();
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#191C23" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Plomberie</Text>
+        {canGoBack ? (
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#191C23" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.placeholder} />
+        )}
+        <Text style={styles.headerTitle}>{categoryName || 'Prestataires'}</Text>
         <TouchableOpacity style={styles.iconButton}>
           <Ionicons name="options-outline" size={24} color="#191C23" />
         </TouchableOpacity>
@@ -78,21 +178,40 @@ const ProviderListScreen = ({ navigation }) => {
         />
       </View>
 
-      <FlatList
-        data={providers}
-        renderItem={renderProviderCard}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {filteredProviders.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="people-outline" size={64} color="#CBD5E1" />
+          <Text style={styles.emptyTitle}>Aucun prestataire trouvé</Text>
+          <Text style={styles.emptyText}>
+            {categoryName ? `Aucun prestataire dans la catégorie ${categoryName}` : 'Aucun prestataire disponible'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredProviders}
+          renderItem={renderProviderCard}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1A73E8']} />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#64748B' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, marginTop: 100 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#191C23', marginTop: 16, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: '#64748B', textAlign: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 16 },
   backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
+  placeholder: { width: 40 },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#191C23' },
   iconButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
   filtersContainer: { marginBottom: 16 },

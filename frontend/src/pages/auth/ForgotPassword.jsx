@@ -9,15 +9,55 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSendLink = () => {
-    navigation.navigate('Login');
-};
+  const API_URL = 'http://192.168.1.10:5000/api';
+
+  const handleSendLink = async () => {
+    if (!email.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer votre email');
+      return;
+    }
+    
+    if (!email.includes('@')) {
+      Alert.alert('Erreur', 'Email invalide');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        Alert.alert(
+          'Email envoyé', 
+          'Un lien de réinitialisation a été envoyé à votre adresse email.',
+          [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+        );
+      } else {
+        Alert.alert('Erreur', data.message || 'Email non trouvé');
+      }
+    } catch (error) {
+      console.log('Forgot password error:', error);
+      Alert.alert('Erreur', 'Impossible d\'envoyer l\'email. Vérifiez votre connexion.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -27,7 +67,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
       >
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
           {/* Header with Back Arrow */}
-<TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#191C23" />
           </TouchableOpacity>
 
@@ -59,15 +99,21 @@ const ForgotPasswordScreen = ({ navigation }) => {
                   onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  editable={!loading}
                 />
               </View>
 
               <TouchableOpacity 
-                style={styles.sendButton}
+                style={[styles.sendButton, loading && styles.sendButtonDisabled]}
                 onPress={handleSendLink}
                 activeOpacity={0.8}
+                disabled={loading}
               >
-                <Text style={styles.sendButtonText}>Envoyer le lien</Text>
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.sendButtonText}>Envoyer le lien</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -172,6 +218,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
+  },
+  sendButtonDisabled: {
+    opacity: 0.7,
   },
   sendButtonText: {
     color: '#FFFFFF',

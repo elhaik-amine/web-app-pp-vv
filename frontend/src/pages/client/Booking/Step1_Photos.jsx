@@ -2,17 +2,47 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TextInput,
   TouchableOpacity, ScrollView, Image, KeyboardAvoidingView, Platform,
+  Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 
-const BookingStep1Screen = ({ navigation }) => {
+const BookingStep1Screen = ({ navigation, route }) => {
   const [description, setDescription] = useState('');
-  const [photos, setPhotos] = useState([
-    { id: '1', uri: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=200&auto=format&fit=crop' },
-    { id: '2', uri: 'https://images.unsplash.com/photo-1595467795924-279093847524?q=80&w=200&auto=format&fit=crop' },
-  ]);
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  
+  const { providerId, providerName } = route.params || {};
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission refusée', 'Vous devez autoriser l\'accès à la galerie');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+    });
+
+    if (!result.canceled && photos.length < 5) {
+      setPhotos([...photos, { id: Date.now().toString(), uri: result.assets[0].uri }]);
+    } else if (photos.length >= 5) {
+      Alert.alert('Limite atteinte', 'Vous ne pouvez ajouter que 5 photos maximum');
+    }
+  };
 
   const removePhoto = (id) => setPhotos(photos.filter(photo => photo.id !== id));
+
+  const handleContinue = () => {
+    if (!description.trim()) {
+      Alert.alert('Erreur', 'Veuillez décrire votre problème');
+      return;
+    }
+    
+navigation.replace('Step2', { providerId, providerName, description, photos });  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -51,29 +81,34 @@ const BookingStep1Screen = ({ navigation }) => {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Photos du problème (2-5 photos)</Text>
-            <TouchableOpacity style={styles.uploadZone}>
+            <TouchableOpacity style={styles.uploadZone} onPress={pickImage}>
               <View style={styles.uploadIconContainer}>
                 <Ionicons name="camera" size={32} color="#1A73E8" />
               </View>
               <Text style={styles.uploadText}>Appuyez pour ajouter des photos</Text>
+              <Text style={styles.uploadSubtext}>{photos.length}/5 photos</Text>
             </TouchableOpacity>
-            <View style={styles.photoGrid}>
-              {photos.map((photo) => (
-                <View key={photo.id} style={styles.photoWrapper}>
-                  <Image source={{ uri: photo.uri }} style={styles.thumbnail} />
-                  <TouchableOpacity style={styles.removeBadge} onPress={() => removePhoto(photo.id)}>
-                    <Ionicons name="close" size={14} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.noteText}>⚠️ Les photos ne peuvent pas être modifiées après soumission</Text>
+            
+            {photos.length > 0 && (
+              <View style={styles.photoGrid}>
+                {photos.map((photo) => (
+                  <View key={photo.id} style={styles.photoWrapper}>
+                    <Image source={{ uri: photo.uri }} style={styles.thumbnail} />
+                    <TouchableOpacity style={styles.removeBadge} onPress={() => removePhoto(photo.id)}>
+                      <Ionicons name="close" size={14} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            <Text style={styles.noteText}>⚠️ Les photos aident le prestataire à mieux comprendre votre besoin</Text>
           </View>
           <View style={styles.bottomSpacer} />
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.continueButton} onPress={() => navigation.navigate('Step2')}>
+          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
             <Text style={styles.continueButtonText}>Continuer →</Text>
           </TouchableOpacity>
         </View>
@@ -100,6 +135,7 @@ const styles = StyleSheet.create({
   uploadZone: { height: 140, borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', marginBottom: 20 },
   uploadIconContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F0F7FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   uploadText: { fontSize: 14, color: '#64748B' },
+  uploadSubtext: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
   photoWrapper: { width: 80, height: 80, marginRight: 12, marginBottom: 12, position: 'relative' },
   thumbnail: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#F1F5F9' },

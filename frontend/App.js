@@ -63,15 +63,13 @@ export default function App() {
         <Stack.Screen name="QRCodeDisplay" component={QRCodeDisplayScreen} />
         <Stack.Screen name="Avis" component={AvisScreen} />
         <Stack.Screen name="Profil" component={ProfilScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
 
         {/* Provider */}
         <Stack.Screen name="ProviderDashboard" component={ProviderDashboardScreen} />
         <Stack.Screen name="QRScanner" component={QRScannerScreen} />
         <Stack.Screen name="UploadPhotos" component={UploadPhotosScreen} />
         <Stack.Screen name="WalletTokens" component={WalletTokensScreen} />
-
-        {/* Shared */}
-        <Stack.Screen name="Notifications" component={NotificationsScreen} />
 
         {/* Admin */}
         <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />

@@ -1,11 +1,82 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
-  ScrollView, Image, Platform,
+  ScrollView, Image, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BookingStep4Screen = ({ navigation }) => {
+const BookingStep4Screen = ({ navigation, route }) => {
+  const [submitting, setSubmitting] = useState(false);
+  
+  const { 
+    providerId, 
+    providerName, 
+    description, 
+    photos, 
+    proposedPrice, 
+    bookingDate, 
+    timeSlot 
+  } = route.params || {};
+  
+  const API_URL = 'http://192.168.1.10:5000/api';
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      
+      const bookingData = {
+        provider_id: providerId,
+        booking_date: bookingDate,
+        time_slot: timeSlot,
+        agreed_price: proposedPrice,
+        notes: description,
+      };
+      
+      const response = await fetch(`${API_URL}/bookings`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookingData),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        Alert.alert(
+          'Succès', 
+          'Votre réservation a été envoyée au prestataire!',
+          [
+            { 
+              text: 'OK', 
+              onPress: () => {
+                // Go back to HomeClient and clear the booking stack
+                navigation.popToTop();
+                navigation.navigate('HomeClient');
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Erreur', data.message || 'Erreur lors de la réservation');
+      }
+    } catch (error) {
+      console.log('Error creating booking:', error);
+      Alert.alert('Erreur', 'Impossible de créer la réservation');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -28,14 +99,12 @@ const BookingStep4Screen = ({ navigation }) => {
 
         <View style={styles.summaryCard}>
           <View style={styles.providerRow}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1540560717464-578bad5d138b?q=80&w=200&auto=format&fit=crop' }} style={styles.providerAvatar} />
-            <View style={styles.providerInfo}>
-              <Text style={styles.providerName}>Ahmed B.</Text>
-              <Text style={styles.providerSpecialty}>Expert Plombier</Text>
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitial}>{providerName?.charAt(0) || 'P'}</Text>
             </View>
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={14} color="#FFB300" />
-              <Text style={styles.ratingText}>4.9</Text>
+            <View style={styles.providerInfo}>
+              <Text style={styles.providerName}>{providerName || 'Prestataire'}</Text>
+              <Text style={styles.providerSpecialty}>Prestataire de service</Text>
             </View>
           </View>
 
@@ -43,51 +112,66 @@ const BookingStep4Screen = ({ navigation }) => {
 
           <View style={styles.detailRow}>
             <View style={styles.iconLabelGroup}>
-              <MaterialCommunityIcons name="wrench" size={20} color="#1A73E8" />
+              <MaterialCommunityIcons name="tools" size={20} color="#1A73E8" />
               <Text style={styles.detailLabel}>Service</Text>
             </View>
-            <Text style={styles.detailValue}>Plomberie</Text>
+            <Text style={styles.detailValue}>Service à domicile</Text>
           </View>
+          
           <View style={styles.detailRow}>
             <View style={styles.iconLabelGroup}>
               <Ionicons name="calendar-outline" size={20} color="#1A73E8" />
               <Text style={styles.detailLabel}>Date</Text>
             </View>
-            <Text style={styles.detailValue}>Mercredi 15 Octobre 2023</Text>
+            <Text style={styles.detailValue}>{formatDate(bookingDate)}</Text>
           </View>
+          
           <View style={styles.detailRow}>
             <View style={styles.iconLabelGroup}>
               <Ionicons name="time-outline" size={20} color="#1A73E8" />
               <Text style={styles.detailLabel}>Créneau</Text>
             </View>
-            <Text style={styles.detailValue}>12:00 - 15:00 Midi</Text>
+            <Text style={styles.detailValue}>{timeSlot}</Text>
           </View>
+          
           <View style={styles.detailRow}>
             <View style={styles.iconLabelGroup}>
               <Ionicons name="pricetag-outline" size={20} color="#1A73E8" />
               <Text style={styles.detailLabel}>Prix proposé</Text>
             </View>
-            <Text style={styles.priceValue}>200 MAD</Text>
+            <Text style={styles.priceValue}>{proposedPrice} MAD</Text>
           </View>
-          <View style={[styles.detailRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
-            <View style={styles.iconLabelGroup}>
-              <Ionicons name="camera-outline" size={20} color="#1A73E8" />
-              <Text style={styles.detailLabel}>Photos</Text>
+          
+          {description && (
+            <View style={[styles.detailRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
+              <View style={styles.iconLabelGroup}>
+                <Ionicons name="document-text-outline" size={20} color="#1A73E8" />
+                <Text style={styles.detailLabel}>Description</Text>
+              </View>
+              <Text style={styles.descriptionValue}>{description.substring(0, 50)}...</Text>
             </View>
-            <Text style={styles.photosValue}>2 photos ajoutées ✓</Text>
-          </View>
+          )}
         </View>
 
         <View style={styles.infoBox}>
           <Ionicons name="clipboard-outline" size={20} color="#1A73E8" style={styles.infoIcon} />
           <Text style={styles.infoText}>Votre demande sera envoyée au prestataire. Il pourra accepter ou négocier le prix.</Text>
         </View>
+        
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.confirmButton} onPress={() => navigation.navigate('MesReservations')}>
-          <Text style={styles.confirmButtonText}>Confirmer la réservation ✓</Text>
+        <TouchableOpacity 
+          style={[styles.confirmButton, submitting && styles.confirmButtonDisabled]} 
+          onPress={handleConfirm}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.confirmButtonText}>Confirmer la réservation ✓</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -108,25 +192,25 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 20, fontWeight: '800', color: '#191C23', marginBottom: 20 },
   summaryCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', elevation: 2, marginBottom: 24 },
   providerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  providerAvatar: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#F1F5F9' },
+  avatarPlaceholder: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#F0F7FF', alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { fontSize: 24, fontWeight: '700', color: '#1A73E8' },
   providerInfo: { flex: 1, marginLeft: 16 },
   providerName: { fontSize: 18, fontWeight: '700', color: '#191C23' },
   providerSpecialty: { fontSize: 14, color: '#64748B' },
-  ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF8E1', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  ratingText: { fontSize: 14, fontWeight: '700', color: '#191C23', marginLeft: 4 },
   divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 20 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
   iconLabelGroup: { flexDirection: 'row', alignItems: 'center' },
   detailLabel: { fontSize: 14, color: '#64748B', marginLeft: 12 },
   detailValue: { fontSize: 14, fontWeight: '600', color: '#191C23', textAlign: 'right', maxWidth: '50%' },
+  descriptionValue: { fontSize: 14, color: '#64748B', textAlign: 'right', maxWidth: '50%' },
   priceValue: { fontSize: 18, fontWeight: '800', color: '#1A73E8' },
-  photosValue: { fontSize: 14, fontWeight: '700', color: '#10B981' },
   infoBox: { flexDirection: 'row', backgroundColor: '#F0F7FF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#D0E4FF' },
   infoIcon: { marginTop: 2 },
   infoText: { flex: 1, marginLeft: 12, fontSize: 14, color: '#1A73E8', lineHeight: 20 },
   bottomSpacer: { height: 120 },
   footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 24, paddingBottom: 34, paddingTop: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   confirmButton: { backgroundColor: '#10B981', height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  confirmButtonDisabled: { opacity: 0.7 },
   confirmButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
 });
 

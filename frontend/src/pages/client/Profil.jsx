@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,20 +10,186 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
 const UserProfileScreen = ({ navigation }) => {
-  const [fullName, setFullName] = useState('Karim Mansouri');
-  const [phone, setPhone] = useState('+212 661 23 45 67');
-  const [location, setLocation] = useState('Casablanca, Maârif');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [user, setUser] = useState(null);
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState('');
+  const [email, setEmail] = useState('');
+  const [avatar, setAvatar] = useState(null);
+
+  const API_URL = 'http://192.168.1.10:5000/api';
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const storedUser = await AsyncStorage.getItem('khidmati_user');
+      
+      if (!token) {
+        navigation.replace('Login');
+        return;
+      }
+      
+      // Try to get fresh data from API
+      const response = await fetch(`${API_URL}/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setUser(data.data);
+        setFullName(data.data.name || '');
+        setPhone(data.data.phone || '');
+        setEmail(data.data.email || '');
+        setLocation(data.data.city || 'Casablanca, Maroc');
+        setAvatar(data.data.avatar);
+      } else if (storedUser) {
+        // Fallback to stored user
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        setFullName(parsedUser.name || '');
+        setPhone(parsedUser.phone || '');
+        setEmail(parsedUser.email || '');
+        setLocation(parsedUser.city || 'Casablanca, Maroc');
+        setAvatar(parsedUser.avatar);
+      }
+    } catch (error) {
+      console.log('Error fetching profile:', error);
+      // Try to load from storage
+      const storedUser = await AsyncStorage.getItem('khidmati_user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        setFullName(parsedUser.name || '');
+        setPhone(parsedUser.phone || '');
+        setEmail(parsedUser.email || '');
+        setLocation(parsedUser.city || 'Casablanca, Maroc');
+        setAvatar(parsedUser.avatar);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission refusée', 'Vous devez autoriser l\'accès à la galerie');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setAvatar(result.assets[0].uri);
+      // Auto-save after picking
+      saveProfile(result.assets[0].uri);
+    }
+  };
+
+  const saveProfile = async (newAvatar = null) => {
+    setSaving(true);
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      
+      const updateData = {
+        name: fullName,
+        phone: phone,
+      };
+      
+      if (newAvatar) {
+        // Handle avatar upload if needed
+        updateData.avatar = newAvatar;
+      }
+      
+      const response = await fetch(`${API_URL}/users/me`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update stored user
+        const storedUser = await AsyncStorage.getItem('khidmati_user');
+        if (storedUser) {
+          const updatedUser = { ...JSON.parse(storedUser), ...updateData };
+          await AsyncStorage.setItem('khidmati_user', JSON.stringify(updatedUser));
+        }
+        Alert.alert('Succès', 'Profil mis à jour');
+      } else {
+        Alert.alert('Erreur', data.message || 'Erreur lors de la mise à jour');
+      }
+    } catch (error) {
+      console.log('Error saving profile:', error);
+      Alert.alert('Erreur', 'Impossible de mettre à jour le profil');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Déconnexion',
+      'Voulez-vous vraiment vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { 
+          text: 'Déconnecter', 
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem('khidmati_token');
+            await AsyncStorage.removeItem('khidmati_user');
+            navigation.replace('Login');
+          }
+        }
+      ]
+    );
+  };
 
   const menuItems = [
-    { id: '1', title: 'Mes Réservations', icon: 'calendar-outline' },
-    { id: '2', title: 'Notifications', icon: 'notifications-outline' },
-    { id: '3', title: 'Aide & Support', icon: 'help-circle-outline' },
-    { id: '4', title: 'Conditions d\'utilisation', icon: 'document-text-outline' },
+    { id: '1', title: 'Mes Réservations', icon: 'calendar-outline', route: 'MesReservations' },
+    { id: '2', title: 'Notifications', icon: 'notifications-outline', route: 'Notifications' },
+    { id: '3', title: 'Aide & Support', icon: 'help-circle-outline', route: null },
+    { id: '4', title: 'Conditions d\'utilisation', icon: 'document-text-outline', route: null },
   ];
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1A73E8" />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -34,8 +200,8 @@ const UserProfileScreen = ({ navigation }) => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Mon Profil</Text>
-          <TouchableOpacity style={styles.settingsBtn}>
-            <Ionicons name="settings-outline" size={24} color="#191C23" />
+          <TouchableOpacity style={styles.settingsBtn} onPress={pickImage}>
+            <Ionicons name="camera-outline" size={24} color="#191C23" />
           </TouchableOpacity>
         </View>
 
@@ -44,15 +210,15 @@ const UserProfileScreen = ({ navigation }) => {
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrapper}>
               <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?q=80&w=200&auto=format&fit=crop' }}
+                source={{ uri: avatar || 'https://randomuser.me/api/portraits/men/32.jpg' }}
                 style={styles.avatar}
               />
-              <TouchableOpacity style={styles.editBadge}>
+              <TouchableOpacity style={styles.editBadge} onPress={pickImage}>
                 <Ionicons name="camera" size={18} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
             <Text style={styles.userName}>{fullName}</Text>
-            <Text style={styles.userEmail}>karim.mansouri@email.com</Text>
+            <Text style={styles.userEmail}>{email}</Text>
           </View>
 
           {/* Edit Fields */}
@@ -64,6 +230,7 @@ const UserProfileScreen = ({ navigation }) => {
                   style={styles.input}
                   value={fullName}
                   onChangeText={setFullName}
+                  editable={!saving}
                 />
               </View>
             </View>
@@ -76,6 +243,7 @@ const UserProfileScreen = ({ navigation }) => {
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
+                  editable={!saving}
                 />
               </View>
             </View>
@@ -88,9 +256,22 @@ const UserProfileScreen = ({ navigation }) => {
                   style={[styles.input, { marginLeft: 8 }]}
                   value={location}
                   onChangeText={setLocation}
+                  editable={false}
                 />
               </View>
             </View>
+
+            <TouchableOpacity 
+              style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
+              onPress={() => saveProfile()}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Menu Items */}
@@ -100,10 +281,8 @@ const UserProfileScreen = ({ navigation }) => {
                 key={item.id} 
                 style={styles.menuItem}
                 onPress={() => {
-                  if (item.title === 'Mes Réservations') {
-                    navigation.navigate('MesReservations');
-                  } else if (item.title === 'Notifications') {
-                    navigation.navigate('Notifications');
+                  if (item.route) {
+                    navigation.navigate(item.route);
                   }
                 }}
               >
@@ -121,7 +300,7 @@ const UserProfileScreen = ({ navigation }) => {
           {/* Logout Button */}
           <TouchableOpacity 
             style={styles.logoutBtn}
-            onPress={() => navigation.navigate('Login')}
+            onPress={handleLogout}
           >
             <Ionicons name="log-out-outline" size={20} color="#EF4444" />
             <Text style={styles.logoutText}>Se déconnecter</Text>
@@ -138,6 +317,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#64748B',
   },
   header: {
     flexDirection: 'row',
@@ -228,6 +417,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#191C23',
+  },
+  saveButton: {
+    height: 50,
+    backgroundColor: '#1A73E8',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   menuSection: {
     backgroundColor: '#F8FAFC',

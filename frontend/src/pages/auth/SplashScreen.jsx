@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SplashScreen = ({ navigation }) => {
   const dot1 = new Animated.Value(0);
@@ -7,6 +8,7 @@ const SplashScreen = ({ navigation }) => {
   const dot3 = new Animated.Value(0);
 
   useEffect(() => {
+    // Animate the dots
     const animate = (val, delay) => {
       Animated.loop(
         Animated.sequence([
@@ -20,10 +22,20 @@ const SplashScreen = ({ navigation }) => {
     animate(dot2, 200);
     animate(dot3, 400);
 
-    const timer = setTimeout(() => {
-      navigation.replace('Onboarding');
-    }, 3000);
-    return () => clearTimeout(timer);
+    // Clear all data and navigate
+    const clearAndNavigate = async () => {
+      // Clear all data
+      await AsyncStorage.removeItem('khidmati_token');
+      await AsyncStorage.removeItem('khidmati_user');
+      await AsyncStorage.removeItem('onboarding_completed');
+      
+      // Wait 2 seconds for animation
+      setTimeout(() => {
+        navigation.replace('Onboarding');
+      }, 2500);
+    };
+    
+    clearAndNavigate();
   }, []);
 
   return (

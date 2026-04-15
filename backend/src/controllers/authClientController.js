@@ -53,16 +53,19 @@ const loginClient = async (req, res) => {
       return res.status(400).json({ success: false, message: 'email and password are required' });
     }
 
+    // Allow CLIENT, ADMIN, and PROVIDER roles to login through this endpoint
     const [rows] = await pool.execute(
-      'SELECT * FROM users WHERE email = ? AND role = ?',
-      [email, 'CLIENT']
+      'SELECT * FROM users WHERE email = ? AND role IN (?, ?, ?)',
+      [email, 'CLIENT', 'ADMIN', 'PROVIDER']
     );
+    
     if (rows.length === 0) {
       return res.status(400).json({ success: false, message: 'Invalid credentials' });
     }
 
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password);
+    
     if (!match) {
       return res.status(400).json({ success: false, message: 'Invalid credentials' });
     }
@@ -73,6 +76,7 @@ const loginClient = async (req, res) => {
 
     const accessToken = generateAccessToken(user.id);
 
+    // Remove sensitive data from response
     const { password: _, reset_token: __, reset_token_expires: ___, ...safeUser } = user;
 
     res.json({

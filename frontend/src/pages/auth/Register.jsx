@@ -9,17 +9,133 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const RegisterScreen = ({ navigation }) => {
-  const [role, setRole] = useState('client'); // 'client' or 'provider'
+  const [role, setRole] = useState('client');
+  const [loading, setLoading] = useState(false);
+  
+  // Common fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  const API_URL = 'http://192.168.1.10:5000/api';
+
+  const validateForm = () => {
+    if (!fullName.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer votre nom complet');
+      return false;
+    }
+    if (!email.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer votre email');
+      return false;
+    }
+    if (!email.includes('@')) {
+      Alert.alert('Erreur', 'Email invalide');
+      return false;
+    }
+    if (!phone.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer votre numéro de téléphone');
+      return false;
+    }
+    if (!password) {
+      Alert.alert('Erreur', 'Veuillez entrer un mot de passe');
+      return false;
+    }
+    if (password.length < 6) {
+      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+      return false;
+    }
+    return true;
+  };
+
+  const handleRegister = async () => {
+    if (!validateForm()) return;
+
+    setLoading(true);
+
+    try {
+      let url = '';
+      let body = {};
+
+      if (role === 'client') {
+        // CORRECT ENDPOINT for client
+        url = `${API_URL}/auth/client/register`;
+        body = {
+          name: fullName,
+          email: email.trim().toLowerCase(),
+          password: password,
+          phone: phone,
+        };
+      } else {
+        // CORRECT ENDPOINT for provider
+        url = `${API_URL}/auth/provider/register`;
+        body = {
+          name: fullName,
+          email: email.trim().toLowerCase(),
+          password: password,
+          phone: phone,
+          avatar: 'https://via.placeholder.com/150',
+          description: 'Description du prestataire',
+          city: 'Casablanca',
+          category_id: 1,
+        };
+      }
+
+      console.log('Calling:', url);
+      console.log('Body:', body);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+      console.log('Response:', data);
+
+      if (data.success) {
+        const { user, accessToken } = data.data;
+        
+        await AsyncStorage.setItem('khidmati_token', accessToken);
+        await AsyncStorage.setItem('khidmati_user', JSON.stringify(user));
+        
+        Alert.alert('Succès', 'Compte créé avec succès!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (user.role === 'CLIENT') {
+                navigation.replace('HomeClient');
+              } else if (user.role === 'PROVIDER') {
+                navigation.replace('ProviderDashboard');
+              }
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('Erreur', data.message || 'Échec de l\'inscription');
+      }
+    } catch (error) {
+      console.log('Register error:', error);
+      Alert.alert('Erreur', 'Impossible de contacter le serveur. Vérifiez que le backend est démarré.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -93,6 +209,7 @@ const RegisterScreen = ({ navigation }) => {
                 placeholder="Ahmed Benani"
                 value={fullName}
                 onChangeText={setFullName}
+                editable={!loading}
               />
             </View>
 
@@ -105,6 +222,7 @@ const RegisterScreen = ({ navigation }) => {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!loading}
               />
             </View>
 
@@ -112,10 +230,11 @@ const RegisterScreen = ({ navigation }) => {
               <Text style={styles.label}>Téléphone</Text>
               <TextInput
                 style={styles.input}
-                placeholder="+212 6XX XX XX XX"
+                placeholder="0612345678"
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
+                editable={!loading}
               />
             </View>
 
@@ -128,6 +247,7 @@ const RegisterScreen = ({ navigation }) => {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  editable={!loading}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <Ionicons
@@ -147,11 +267,20 @@ const RegisterScreen = ({ navigation }) => {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showPassword}
+                editable={!loading}
               />
             </View>
 
-<TouchableOpacity style={styles.registerButton} onPress={() => role === 'client' ? navigation.replace('HomeClient') : navigation.replace('ProviderDashboard')}>
-              <Text style={styles.registerButtonText}>S'inscrire</Text>
+            <TouchableOpacity 
+              style={[styles.registerButton, loading && styles.registerButtonDisabled]} 
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.registerButtonText}>S'inscrire</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -159,7 +288,7 @@ const RegisterScreen = ({ navigation }) => {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Déjà un compte ? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-  <Text style={styles.loginText}>Se connecter</Text>
+              <Text style={styles.loginText}>Se connecter</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -303,6 +432,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
+  },
+  registerButtonDisabled: {
+    opacity: 0.7,
   },
   registerButtonText: {
     color: '#FFFFFF',
