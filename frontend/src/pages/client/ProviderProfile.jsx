@@ -1,21 +1,123 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
   Image, TouchableOpacity, Dimensions, FlatList,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
 const availability = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-const bookedDays = ['Mar', 'Ven'];
 
-const reviews = [
-  { id: '1', name: 'Karim M.', rating: 5, date: '12 Oct 2023', comment: 'Excellent travail ! Ahmed est très professionnel et a réglé ma fuite en un rien de temps.', avatar: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?q=80&w=100&auto=format&fit=crop' },
-  { id: '2', name: 'Sara L.', rating: 4, date: '05 Oct 2023', comment: 'Très réactif et poli. Le prix était raisonnable par rapport à la qualité du service rendu.', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&auto=format&fit=crop' },
-];
+const ProviderProfileScreen = ({ navigation, route }) => {
+  const [provider, setProvider] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [bookedDays, setBookedDays] = useState([]);
+  
+  const { providerId } = route.params || {};
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-const ProviderProfileScreen = ({ navigation }) => {
+  useEffect(() => {
+    if (providerId) {
+      fetchProviderDetails();
+      fetchProviderReviews();
+      fetchAvailability();
+    }
+  }, [providerId]);
+
+  const fetchProviderDetails = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      
+      const response = await fetch(`${API_URL}/providers/${providerId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      console.log('Provider details:', data);
+      
+      if (data.success) {
+        setProvider(data.data);
+      }
+    } catch (error) {
+      console.log('Error fetching provider:', error);
+    }
+  };
+
+  const fetchProviderReviews = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      
+      const response = await fetch(`${API_URL}/bookings?provider_id=${providerId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Filter reviews from completed bookings
+        const reviewList = data.data
+          .filter(booking => booking.status === 'COMPLETED' && booking.review)
+          .map(booking => ({
+            id: booking.id,
+            name: booking.client_name,
+            rating: booking.review?.rating || 5,
+            date: new Date(booking.created_at).toLocaleDateString(),
+            comment: booking.review?.comment || 'Excellent service!',
+            avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
+          }));
+        setReviews(reviewList);
+      }
+    } catch (error) {
+      console.log('Error fetching reviews:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const fetchAvailability = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const today = new Date().toISOString().split('T')[0];
+      
+      const response = await fetch(`${API_URL}/bookings/slots?provider_id=${providerId}&date=${today}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Mark days as booked based on taken slots
+        const takenDays = data.data.taken || [];
+        // This is simplified - you can enhance based on your logic
+        setBookedDays([]);
+      }
+    } catch (error) {
+      console.log('Error fetching availability:', error);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchProviderDetails();
+    fetchProviderReviews();
+    fetchAvailability();
+  };
+
   const renderReview = ({ item }) => (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
@@ -34,12 +136,45 @@ const ProviderProfileScreen = ({ navigation }) => {
     </View>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1A73E8" />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!provider) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>Prestataire non trouvé</Text>
+          <TouchableOpacity style={styles.backButtonSmall} onPress={() => navigation.goBack()}>
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        bounces={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1A73E8']} />
+        }
+      >
         {/* Header Photo */}
         <View style={styles.headerContainer}>
-          <Image source={{ uri: 'https://images.unsplash.com/photo-1540560717464-578bad5d138b?q=80&w=800&auto=format&fit=crop' }} style={styles.headerImage} />
+          <Image 
+            source={{ uri: provider.avatar || 'https://images.unsplash.com/photo-1540560717464-578bad5d138b?q=80&w=800&auto=format&fit=crop' }} 
+            style={styles.headerImage} 
+          />
           <View style={styles.headerOverlay}>
             <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
               <Ionicons name="arrow-back" size={24} color="#191C23" />
@@ -50,26 +185,28 @@ const ProviderProfileScreen = ({ navigation }) => {
           </View>
           <View style={styles.nameCard}>
             <View style={styles.nameRow}>
-              <Text style={styles.providerName}>Ahmed B.</Text>
-              <MaterialCommunityIcons name="check-decagram" size={20} color="#1A73E8" />
+              <Text style={styles.providerName}>{provider.name}</Text>
+              {provider.is_verified === 1 && (
+                <MaterialCommunityIcons name="check-decagram" size={20} color="#1A73E8" />
+              )}
               <View style={styles.onlineDot} />
             </View>
-            <Text style={styles.providerSpecialty}>Expert Plombier</Text>
+            <Text style={styles.providerSpecialty}>{provider.category_name || 'Prestataire'}</Text>
           </View>
         </View>
 
         {/* Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>4.9 ⭐</Text>
+            <Text style={styles.statValue}>{provider.rating || '4.5'} ⭐</Text>
             <Text style={styles.statLabel}>Note</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>124</Text>
+            <Text style={styles.statValue}>{provider.total_reviews || 0}</Text>
             <Text style={styles.statLabel}>Avis</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>3 ans</Text>
+            <Text style={styles.statValue}>{provider.experience || '3'} ans</Text>
             <Text style={styles.statLabel}>Expérience</Text>
           </View>
         </View>
@@ -77,7 +214,16 @@ const ProviderProfileScreen = ({ navigation }) => {
         {/* Bio */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>À propos</Text>
-          <Text style={styles.bioText}>Expert plombier certifié avec plus de 3 ans d'expérience. Disponible 7j/7 pour les urgences à Casablanca et environs.</Text>
+          <Text style={styles.bioText}>{provider.description || 'Professionnel dédié à fournir un service de qualité.'}</Text>
+        </View>
+
+        {/* Location */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Localisation</Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={20} color="#1A73E8" />
+            <Text style={styles.locationText}>{provider.city || 'Maroc'}</Text>
+          </View>
         </View>
 
         {/* Availability */}
@@ -96,13 +242,22 @@ const ProviderProfileScreen = ({ navigation }) => {
         </View>
 
         {/* Reviews */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Avis Clients</Text>
-            <TouchableOpacity><Text style={styles.seeAllText}>Voir tout</Text></TouchableOpacity>
+        {reviews.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Avis Clients</Text>
+              <TouchableOpacity>
+                <Text style={styles.seeAllText}>Voir tout</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList 
+              data={reviews.slice(0, 3)} 
+              renderItem={renderReview} 
+              keyExtractor={(item) => item.id.toString()} 
+              scrollEnabled={false} 
+            />
           </View>
-          <FlatList data={reviews} renderItem={renderReview} keyExtractor={(item) => item.id} scrollEnabled={false} />
-        </View>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -110,10 +265,13 @@ const ProviderProfileScreen = ({ navigation }) => {
       {/* Footer */}
       <SafeAreaView style={styles.footer}>
         <View style={styles.priceContainer}>
-          <Text style={styles.priceValue}>150 MAD<Text style={styles.priceUnit}>/h</Text></Text>
+          <Text style={styles.priceValue}>{provider.min_price || 150} MAD<Text style={styles.priceUnit}>/h</Text></Text>
           <Text style={styles.priceLabel}>Prix indicatif</Text>
         </View>
-        <TouchableOpacity style={styles.bookButton} onPress={() => navigation.navigate('Step1')}>
+        <TouchableOpacity 
+          style={styles.bookButton} 
+          onPress={() => navigation.navigate('Step1', { providerId: provider.id, providerName: provider.name })}
+        >
           <Text style={styles.bookButtonText}>Réserver maintenant</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -123,6 +281,11 @@ const ProviderProfileScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#64748B' },
+  errorText: { fontSize: 18, color: '#EF4444', marginBottom: 16 },
+  backButtonSmall: { backgroundColor: '#1A73E8', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  backButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   headerContainer: { height: width * 1.0, position: 'relative' },
   headerImage: { width: '100%', height: '100%' },
   headerOverlay: { position: 'absolute', top: 50, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between' },
@@ -141,6 +304,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#191C23', marginBottom: 12 },
   seeAllText: { fontSize: 14, fontWeight: '600', color: '#1A73E8' },
   bioText: { fontSize: 15, color: '#64748B', lineHeight: 24 },
+  locationRow: { flexDirection: 'row', alignItems: 'center' },
+  locationText: { fontSize: 15, color: '#64748B', marginLeft: 8 },
   availabilityList: { paddingVertical: 4 },
   dayChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginRight: 10, borderWidth: 1 },
   dayChipActive: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
@@ -162,7 +327,7 @@ const styles = StyleSheet.create({
   priceValue: { fontSize: 20, fontWeight: '800', color: '#1A73E8' },
   priceUnit: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   priceLabel: { fontSize: 12, color: '#94A3B8' },
-  bookButton: { backgroundColor: '#1A73E8', paddingHorizontal: 24, paddingVertical: 16, borderRadius: 16, elevation: 4 },
+  bookButton: { backgroundColor: '#1A73E8', paddingHorizrontal: 24, paddingVertical: 16, borderRadius: 16, elevation: 4 },
   bookButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });
 

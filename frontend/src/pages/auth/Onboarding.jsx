@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, Dimensions, FlatList,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,17 +37,22 @@ const OnboardingScreen = ({ navigation }) => {
     setCurrentSlideIndex(currentIndex);
   };
 
-  const goToNextSlide = () => {
+  const goToNextSlide = async () => {
     const nextSlideIndex = currentSlideIndex + 1;
     if (nextSlideIndex < slides.length) {
       flatListRef?.current?.scrollToOffset({ offset: nextSlideIndex * width });
       setCurrentSlideIndex(nextSlideIndex);
     } else {
+      // Mark onboarding as completed
+      await AsyncStorage.setItem('onboarding_completed', 'true');
       navigation.replace('Login');
     }
   };
 
-  const skip = () => navigation.replace('Login');
+  const skip = async () => {
+    await AsyncStorage.setItem('onboarding_completed', 'true');
+    navigation.replace('Login');
+  };
 
   const Slide = ({ item }) => (
     <View style={styles.slideContainer}>
