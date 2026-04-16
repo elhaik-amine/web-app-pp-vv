@@ -44,10 +44,24 @@ const RegisterScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [avatar, setAvatar] = useState("");
   const [selectedCity, setSelectedCity] = useState("Casablanca");
+  const [description, setDescription] = useState("");
+  const categories = [
+    { id: 1, name: "Plomberie" },
+    { id: 2, name: "Électricité" },
+    { id: 3, name: "Ménage" },
+    { id: 4, name: "Jardinage" },
+    { id: 5, name: "Climatisation" },
+    { id: 6, name: "Peinture" },
+    { id: 7, name: "Menuiserie" },
+    { id: 8, name: "Plâtrerie" },
+  ];
+
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
   const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
+
   const validateForm = () => {
     if (!fullName.trim()) {
       Alert.alert("Erreur", "Veuillez entrer votre nom complet");
@@ -71,6 +85,10 @@ const RegisterScreen = ({ navigation }) => {
     }
     if (role === "provider" && !selectedCity) {
       Alert.alert("Erreur", "Veuillez choisir une ville au Maroc");
+      return false;
+    }
+    if (role === "provider" && !description.trim()) {
+      Alert.alert("Erreur", "Veuillez ajouter une description");
       return false;
     }
     if (!password) {
@@ -169,6 +187,10 @@ const RegisterScreen = ({ navigation }) => {
           phone,
         };
       } else {
+        if (role === "provider" && !selectedCategory) {
+          alert("Please select a category");
+          return;
+        }
         url = `${API_URL}/auth/provider/register`;
         body = {
           name: fullName,
@@ -176,9 +198,9 @@ const RegisterScreen = ({ navigation }) => {
           password,
           phone,
           avatar,
-          description: "Description du prestataire",
+          description: description.trim(),
           city: selectedCity,
-          category_id: 1,
+          category_id: selectedCategory?.id,
         };
       }
 
@@ -418,6 +440,46 @@ const RegisterScreen = ({ navigation }) => {
                     enregistree dans avatar.
                   </Text>
                 </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.row}
+                >
+                  {categories.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => setSelectedCategory(item)}
+                      style={[
+                        styles.pill,
+                        selectedCategory?.id === item.id && styles.pillSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          selectedCategory?.id === item.id &&
+                            styles.pillTextSelected,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Description</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Parlez de votre experience et des services que vous proposez"
+                    value={description}
+                    onChangeText={setDescription}
+                    editable={!loading}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
               </>
             )}
 
@@ -595,6 +657,11 @@ const styles = StyleSheet.create({
     color: "#191C23",
     backgroundColor: "#F8FAFC",
   },
+  textArea: {
+    height: 110,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
   cityList: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -706,6 +773,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#1A73E8",
+  },
+  row: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  pill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    backgroundColor: "#fff",
+  },
+  pillSelected: {
+    backgroundColor: "#1a1a1a",
+    borderColor: "#1a1a1a",
+  },
+  pillText: {
+    fontSize: 14,
+    color: "#444",
+  },
+  pillTextSelected: {
+    color: "#fff",
+    fontWeight: "500",
   },
 });
 
