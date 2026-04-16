@@ -14,7 +14,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
   const [userRole, setUserRole] = useState('');
   
   const { bookingId } = route.params || {};
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const API_URL = 'http://192.168.1.10:5000/api';
 
   useEffect(() => {
     loadUserRole();
@@ -22,6 +22,17 @@ const BookingDetailScreen = ({ navigation, route }) => {
       fetchBookingDetails();
     }
   }, [bookingId]);
+
+  // Auto-refresh status every 30 seconds for confirmed/in_progress bookings
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (booking?.status === 'CONFIRMED' || booking?.status === 'IN_PROGRESS') {
+        fetchBookingDetails();
+      }
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [booking?.status]);
 
   const loadUserRole = async () => {
     try {
@@ -176,6 +187,10 @@ const BookingDetailScreen = ({ navigation, route }) => {
     return date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long' });
   };
 
+  const formatTimeSlot = (timeSlot) => {
+    return timeSlot || 'Flexible';
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -205,6 +220,8 @@ const BookingDetailScreen = ({ navigation, route }) => {
   const showContactInfo = (booking.status === 'CONFIRMED' || booking.status === 'IN_PROGRESS');
   const isConfirmed = booking.status === 'CONFIRMED';
   const isPending = booking.status === 'PENDING';
+  const isInProgress = booking.status === 'IN_PROGRESS';
+  const isCompleted = booking.status === 'COMPLETED';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -235,7 +252,6 @@ const BookingDetailScreen = ({ navigation, route }) => {
               </Text>
             </View>
             
-            {/* Rating badge - only for CLIENTS */}
             {userRole === 'CLIENT' && (
               <View style={styles.ratingBadge}>
                 <Ionicons name="star" size={14} color="#FFB300" />
@@ -244,7 +260,6 @@ const BookingDetailScreen = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* Phone badge - for PROVIDERS only when booking is confirmed or in progress */}
           {userRole === 'PROVIDER' && showContactInfo && booking.client_phone && (
             <TouchableOpacity style={styles.contactRow} onPress={() => Linking.openURL(`tel:${booking.client_phone}`)}>
               <View style={styles.phoneBadge}>
@@ -269,7 +284,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
               <Ionicons name="time-outline" size={20} color="#1A73E8" />
               <View style={styles.detailTextContainer}>
                 <Text style={styles.detailLabel}>Heure</Text>
-                <Text style={styles.detailValue}>{booking.time_slot || 'Flexible'}</Text>
+                <Text style={styles.detailValue}>{formatTimeSlot(booking.time_slot)}</Text>
               </View>
             </View>
           </View>
@@ -280,7 +295,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* QR Code for CLIENT - Show QR to display */}
+        {/* QR Code for CLIENT - Show QR when confirmed */}
         {userRole === 'CLIENT' && isConfirmed && (
           <TouchableOpacity 
             style={styles.qrButton}
@@ -291,18 +306,29 @@ const BookingDetailScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         )}
 
-        {/* QR Scanner for PROVIDER - Scan client's QR */}
+        {/* QR Scanner for PROVIDER - Scan client's QR when confirmed */}
         {userRole === 'PROVIDER' && isConfirmed && (
-  <TouchableOpacity 
-    style={styles.scannerButton}
-    onPress={() => navigation.navigate('QRScanner', { bookingId: booking.id })}
-  >
-    <Ionicons name="scan-outline" size={24} color="#FFFFFF" />
-    <Text style={styles.scannerButtonText}>Scanner QR Client</Text>
-  </TouchableOpacity>
-)}
+          <TouchableOpacity 
+            style={styles.scannerButton}
+            onPress={() => navigation.navigate('QRScanner', { bookingId: booking.id })}
+          >
+            <Ionicons name="scan-outline" size={24} color="#FFFFFF" />
+            <Text style={styles.scannerButtonText}>Scanner QR Client</Text>
+          </TouchableOpacity>
+        )}
 
-        {/* Negotiation Button - ONLY for PENDING bookings (both roles) */}
+        {/* Complete Service Button for PROVIDER - When service is in progress */}
+        {userRole === 'PROVIDER' && isInProgress && (
+          <TouchableOpacity 
+            style={styles.completeButton}
+            onPress={() => navigation.navigate('UploadPhotos', { bookingId: booking.id })}
+          >
+            <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
+            <Text style={styles.completeButtonText}>Terminer la mission</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Negotiation Button - ONLY for PENDING bookings */}
         {isPending && (
           <TouchableOpacity 
             style={styles.negotiateButton}
@@ -342,7 +368,6 @@ const BookingDetailScreen = ({ navigation, route }) => {
         {/* Actions */}
         {booking.status !== 'CANCELLED' && booking.status !== 'COMPLETED' && (
           <View style={styles.actionsContainer}>
-            {/* Cancel button - only for PENDING status */}
             {isPending && (
               <TouchableOpacity 
                 style={styles.cancelAction} 
@@ -364,7 +389,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
         )}
 
         {/* Review Button for completed bookings */}
-        {booking.status === 'COMPLETED' && !booking.has_review && userRole === 'CLIENT' && (
+        {isCompleted && !booking.has_review && userRole === 'CLIENT' && (
           <TouchableOpacity 
             style={styles.reviewButton}
             onPress={() => navigation.navigate('Avis', { bookingId: booking.id })}
@@ -417,6 +442,8 @@ const styles = StyleSheet.create({
   qrButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 12 },
   scannerButton: { backgroundColor: '#10B981', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 20, marginBottom: 16, elevation: 4 },
   scannerButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 12 },
+  completeButton: { backgroundColor: '#8B5CF6', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 20, marginBottom: 16, elevation: 4 },
+  completeButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 12 },
   negotiateButton: { backgroundColor: '#F97316', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 20, marginBottom: 16, elevation: 4 },
   negotiateButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 12 },
   section: { marginBottom: 32 },

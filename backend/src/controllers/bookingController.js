@@ -173,6 +173,7 @@ const getBookingById = async (req, res) => {
 };
 
 // ─── PATCH /api/bookings/:id/confirm ─────────────────────────────────────────
+
 const confirmBooking = async (req, res) => {
   try {
     const booking = await getBooking(req.params.id);
@@ -185,20 +186,34 @@ const confirmBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cannot confirm a booking with status: ${booking.status}` });
     }
 
+    // Generate QR code
+    const crypto = require('crypto');
     const qrCode = crypto.randomBytes(32).toString('hex');
-    const qrExpiresAt = new Date();
-    qrExpiresAt.setHours(qrExpiresAt.getHours() + 2);
+    
+    // Set QR activation time based on booking date and time slot
+    const bookingDate = new Date(booking.booking_date);
+    const timeSlot = booking.time_slot;
+    let startHour = 8;
+    if (timeSlot === '12:00-15:00') startHour = 12;
+    else if (timeSlot === '15:00-18:00') startHour = 15;
+    else if (timeSlot === '18:00-21:00') startHour = 18;
+    
+    const qrActiveFrom = new Date(bookingDate);
+    qrActiveFrom.setHours(startHour, 0, 0, 0);
+    
+    const qrActiveUntil = new Date(bookingDate);
+    qrActiveUntil.setHours(startHour + 3, 0, 0, 0);
 
     await pool.execute(
-      "UPDATE bookings SET status = 'CONFIRMED', qr_code = ?, qr_expires_at = ? WHERE id = ?",
-      [qrCode, qrExpiresAt, booking.id]
+      "UPDATE bookings SET status = 'CONFIRMED', qr_code = ?, qr_active_from = ?, qr_active_until = ? WHERE id = ?",
+      [qrCode, qrActiveFrom, qrActiveUntil, booking.id]
     );
 
     await createNotification(
       booking.client_id,
       'BOOKING_CONFIRMED',
       'Booking Confirmed',
-      `Your booking on ${booking.booking_date} (${booking.time_slot}) is confirmed.`,
+      `Your booking on ${booking.booking_date} (${booking.time_slot}) is confirmed. QR code will be active from ${qrActiveFrom.toLocaleTimeString()}.`,
       { booking_id: booking.id }
     );
 
@@ -213,7 +228,6 @@ const confirmBooking = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // ─── POST /api/bookings/:id/accept-price ─────────────────────────────────────
 const acceptPrice = async (req, res) => {
   try {
@@ -412,6 +426,7 @@ const rejectBookingOffer = async (req, res) => {
 
 // ─── POST /api/bookings/:id/scan-qr ──────────────────────────────────────────
 // ─── POST /api/bookings/:id/scan-qr ──────────────────────────────────────────
+
 const scanQR = async (req, res) => {
   try {
     const { qr_code } = req.body;
@@ -424,17 +439,41 @@ const scanQR = async (req, res) => {
     const booking = await getBooking(bookingId);
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
-    // Allow PROVIDER to scan (changed from client)
+    // Check if user is provider
     if (booking.provider_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Only the provider can scan the QR code' });
     }
+    
+    // Check if booking is confirmed
     if (booking.status !== 'CONFIRMED') {
       return res.status(400).json({ success: false, message: `Cannot scan QR on a booking with status: ${booking.status}` });
     }
+    
+    // Check if QR code matches
     if (booking.qr_code !== qr_code) {
       return res.status(400).json({ success: false, message: 'Invalid QR code' });
     }
+    
+    // Check if QR is active (time-based)
+    const now = new Date();
+    const qrActiveFrom = new Date(booking.qr_active_from);
+    const qrActiveUntil = new Date(booking.qr_active_until);
+    
+    if (now < qrActiveFrom) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `QR code actif à partir de ${qrActiveFrom.toLocaleTimeString()}` 
+      });
+    }
+    
+    if (now > qrActiveUntil) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'QR code expiré' 
+      });
+    }
 
+    // Update status to IN_PROGRESS
     await pool.execute("UPDATE bookings SET status = 'IN_PROGRESS' WHERE id = ?", [booking.id]);
 
     await createNotification(
@@ -459,7 +498,6 @@ const scanQR = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // ─── PATCH /api/bookings/:id/complete ────────────────────────────────────────
 const completeBooking = async (req, res) => {
   try {

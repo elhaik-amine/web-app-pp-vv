@@ -21,30 +21,37 @@ const BookingStep3Screen = ({ navigation, route }) => {
   const [availableSlots, setAvailableSlots] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [daysInMonth, setDaysInMonth] = useState([]);
   
   const { providerId, providerName, description, photos, proposedPrice } = route.params || {};
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const API_URL = 'http://192.168.1.10:5000/api';
 
-  // Generate next 30 days
-  const getDaysArray = () => {
+  const weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+  // Generate next 60 days starting from today
+  const generateDays = () => {
     const days = [];
     const today = new Date();
-    for (let i = 1; i <= 30; i++) {
-      const date = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < 60; i++) {
+      const date = new Date(today);
       date.setDate(today.getDate() + i);
       days.push({
         date: date,
         day: date.getDate(),
         month: date.getMonth(),
         year: date.getFullYear(),
-        isPast: false,
+        isPast: i < 0,
+        dateString: date.toISOString().split('T')[0],
       });
     }
     return days;
   };
 
-  const [daysInMonth, setDaysInMonth] = useState(getDaysArray());
-  const weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  useEffect(() => {
+    setDaysInMonth(generateDays());
+  }, []);
 
   const checkAvailability = async (date, slot) => {
     setLoading(true);
@@ -85,20 +92,26 @@ const BookingStep3Screen = ({ navigation, route }) => {
     
     const isAvailable = await checkAvailability(selectedDate, selectedSlot);
     if (isAvailable) {
-     navigation.replace('Step4', { 
-  providerId, 
-  providerName, 
-  description, 
-  photos, 
-  proposedPrice,
-  bookingDate: selectedDate.toISOString().split('T')[0],
-  timeSlot: selectedSlot.time,
-});
+      navigation.replace('Step4', { 
+        providerId, 
+        providerName, 
+        description, 
+        photos, 
+        proposedPrice,
+        bookingDate: selectedDate.toISOString().split('T')[0],
+        timeSlot: selectedSlot.time,
+      });
     }
   };
 
   const formatMonth = (date) => {
     return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  };
+
+  const isDateDisabled = (day) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return day.date < today;
   };
 
   return (
@@ -132,12 +145,32 @@ const BookingStep3Screen = ({ navigation, route }) => {
             <View style={styles.daysGrid}>
               {daysInMonth.map((day, index) => {
                 const isSelected = selectedDate?.toDateString() === day.date.toDateString();
+                const isDisabled = isDateDisabled(day);
+                const dayOfWeek = day.date.getDay();
+                const adjustedDayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                
+                // Add margin for first week
+                const marginLeft = index === 0 ? adjustedDayOfWeek * (width / 7) : 0;
+                
                 return (
                   <TouchableOpacity 
                     key={index} 
-                    onPress={() => setSelectedDate(day.date)}
-                    style={[styles.dayButton, isSelected && styles.dayButtonActive]}>
-                    <Text style={[styles.dayText, isSelected && styles.dayTextActive]}>{day.day}</Text>
+                    onPress={() => !isDisabled && setSelectedDate(day.date)}
+                    disabled={isDisabled}
+                    style={[
+                      styles.dayButton, 
+                      isSelected && styles.dayButtonActive,
+                      { marginLeft: marginLeft },
+                      isDisabled && styles.dayButtonDisabled
+                    ]}
+                  >
+                    <Text style={[
+                      styles.dayText, 
+                      isSelected && styles.dayTextActive,
+                      isDisabled && styles.dayTextDisabled
+                    ]}>
+                      {day.day}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -196,12 +229,14 @@ const styles = StyleSheet.create({
   monthText: { fontSize: 14, fontWeight: '600', color: '#1A73E8' },
   calendarContainer: { backgroundColor: '#F8FAFC', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
   weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  weekDayText: { width: (width - 112) / 7, textAlign: 'center', fontSize: 11, color: '#94A3B8', fontWeight: '700' },
+  weekDayText: { width: (width - 112) / 7, textAlign: 'center', fontSize: 12, color: '#94A3B8', fontWeight: '600' },
   daysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   dayButton: { width: (width - 112) / 7, height: 44, alignItems: 'center', justifyContent: 'center', marginVertical: 4, borderRadius: 12 },
   dayButtonActive: { backgroundColor: '#1A73E8', elevation: 4 },
+  dayButtonDisabled: { opacity: 0.3 },
   dayText: { fontSize: 14, fontWeight: '600', color: '#191C23' },
   dayTextActive: { color: '#FFFFFF', fontWeight: '800' },
+  dayTextDisabled: { color: '#94A3B8' },
   slotRow: { justifyContent: 'space-between' },
   slotCard: { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', position: 'relative' },
   slotCardActive: { backgroundColor: '#1A73E8', borderColor: '#1A73E8', elevation: 4 },
