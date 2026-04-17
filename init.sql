@@ -169,7 +169,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE TABLE IF NOT EXISTS token_transactions (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   user_id     INT NOT NULL,
-  type        ENUM('PURCHASE','DEDUCTION','REWARD') NOT NULL,
+  type        ENUM('PURCHASE','DEDUCTION','REWARD','SPEND') NOT NULL,
+
   amount      DECIMAL(10,2) NOT NULL,
   description VARCHAR(255),
   booking_id  INT,

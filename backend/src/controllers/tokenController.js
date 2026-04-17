@@ -138,4 +138,56 @@ const stripeWebhook = async (req, res) => {
   res.json({ received: true });
 };
 
-module.exports = { getBalance, getHistory, buyTokens, stripeWebhook };
+// ─── POST /api/tokens/spend ────────────────────────────────────────────────
+const spendTokens = async (req, res) => {
+  try {
+    const { token_amount, description } = req.body;
+
+    if (!token_amount || token_amount <= 0 || !Number.isInteger(Number(token_amount))) {
+      return res.status(400).json({ success: false, message: 'token_amount must be a positive integer' });
+    }
+
+    const tokens = Number(token_amount);
+
+    // Check current balance first
+    const [rows] = await pool.execute('SELECT token_balance FROM users WHERE id = ?', [req.user.id]);
+    const currentBalance = Number(rows[0]?.token_balance ?? 0);
+
+    if (currentBalance < tokens) {
+      return res.status(400).json({
+        success: false,
+        message: `Solde insuffisant. Vous avez ${currentBalance} token(s), besoin de ${tokens}.`,
+        data: { balance: currentBalance },
+      });
+    }
+
+    await pool.execute(
+      'UPDATE users SET token_balance = token_balance - ? WHERE id = ?',
+      [tokens, req.user.id]
+    );
+
+    await pool.execute(
+      `INSERT INTO token_transactions (user_id, type, amount, description)
+       VALUES (?, 'DEDUCTION', ?, ?)`,
+      [req.user.id, tokens, description || 'Token spend']
+    );
+
+    const [updated] = await pool.execute('SELECT token_balance FROM users WHERE id = ?', [req.user.id]);
+    const newBalance = Number(updated[0].token_balance);
+
+    try {
+      getIO().to(`user_${req.user.id}`).emit('token:updated', { type: 'SPEND', amount: tokens, balance: newBalance });
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      data: { new_balance: newBalance, spent: tokens },
+      message: `${tokens} token(s) déduit(s)`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getBalance, getHistory, buyTokens, stripeWebhook, spendTokens };
+
