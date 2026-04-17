@@ -37,7 +37,7 @@ const getAvailableSlots = async (req, res) => {
     }
 
     const [takenRows] = await pool.execute(
-      `SELECT time_slot FROM bookings WHERE provider_id = ? AND booking_date = ? AND status != 'CANCELLED'`,
+      `SELECT time_slot FROM bookings WHERE provider_id = ? AND date_meeting = ? AND status != 'CANCELLED'`,
       [provider_id, date]
     );
 
@@ -53,10 +53,10 @@ const getAvailableSlots = async (req, res) => {
 // ─── POST /api/bookings ───────────────────────────────────────────────────────
 const createBooking = async (req, res) => {
   try {
-    const { provider_id, booking_date, time_slot, agreed_price, notes } = req.body;
+    const { provider_id, date_meeting, time_slot, estimated_price, notes } = req.body;
 
-    if (!provider_id || !booking_date || !time_slot) {
-      return res.status(400).json({ success: false, message: 'provider_id, booking_date, and time_slot are required' });
+    if (!provider_id || !date_meeting || !time_slot) {
+      return res.status(400).json({ success: false, message: 'provider_id, date_meeting, and time_slot are required' });
     }
 
     if (!ALL_SLOTS.includes(time_slot)) {
@@ -72,10 +72,10 @@ const createBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Provider not found or not available' });
     }
 
-    // Save the booking with the price from Step 2
+    // Save the booking
     const [result] = await pool.execute(
-      `INSERT INTO bookings (client_id, provider_id, booking_date, time_slot, estimated_price, agreed_price, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, provider_id, booking_date, time_slot, agreed_price, agreed_price, notes || null]
+      `INSERT INTO bookings (client_id, provider_id, date_meeting, time_slot, estimated_price, notes) VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.user.id, provider_id, date_meeting, time_slot, estimated_price || null, notes || null]
     );
 
     const booking = await getBooking(result.insertId);
@@ -87,7 +87,7 @@ const createBooking = async (req, res) => {
       provider_id,
       'BOOKING_NEW',
       'Nouvelle demande de réservation',
-      `${clientName} a réservé vos services pour ${agreed_price} MAD le ${booking_date} (${time_slot})`,
+      `${clientName} a réservé vos services pour le ${date_meeting} (${time_slot})`,
       { booking_id: booking.id }
     );
 
@@ -131,7 +131,7 @@ const getBookings = async (req, res) => {
 
     if (status) { sql += ' AND b.status = ?'; params.push(status); }
 
-    sql += ' ORDER BY b.booking_date DESC, b.time_slot ASC';
+    sql += ' ORDER BY b.date_meeting DESC, b.time_slot ASC';
 
     const [rows] = await pool.execute(sql, params);
     res.json({ success: true, data: rows });
@@ -191,7 +191,7 @@ const confirmBooking = async (req, res) => {
     const qrCode = crypto.randomBytes(32).toString('hex');
     
     // Set QR activation time based on booking date and time slot
-    const bookingDate = new Date(booking.booking_date);
+    const bookingDate = new Date(booking.date_meeting);
     const timeSlot = booking.time_slot;
     let startHour = 8;
     if (timeSlot === '12:00-15:00') startHour = 12;
@@ -213,7 +213,7 @@ const confirmBooking = async (req, res) => {
       booking.client_id,
       'BOOKING_CONFIRMED',
       'Booking Confirmed',
-      `Your booking on ${booking.booking_date} (${booking.time_slot}) is confirmed. QR code will be active from ${qrActiveFrom.toLocaleTimeString()}.`,
+      `Votre réservation du ${booking.date_meeting} (${booking.time_slot}) est confirmée. Le QR code sera actif à partir de ${qrActiveFrom.toLocaleTimeString()}.`,
       { booking_id: booking.id }
     );
 
@@ -517,7 +517,7 @@ const completeBooking = async (req, res) => {
       booking.client_id,
       'BOOKING_COMPLETED',
       'Service Completed',
-      `Your booking on ${booking.booking_date} (${booking.time_slot}) is completed. Please leave a review.`,
+      `Votre réservation du ${booking.date_meeting} (${booking.time_slot}) est terminée. Laissez un avis !`,
       { booking_id: booking.id }
     );
 
@@ -550,7 +550,7 @@ const cancelBooking = async (req, res) => {
       notifyId,
       'BOOKING_CANCELLED',
       'Booking Cancelled',
-      `Booking on ${booking.booking_date} (${booking.time_slot}) was cancelled`,
+      `La réservation du ${booking.date_meeting} (${booking.time_slot}) a été annulée`,
       { booking_id: booking.id }
     );
 

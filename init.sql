@@ -71,6 +71,28 @@ CREATE TABLE IF NOT EXISTS bookings (
   UNIQUE KEY uq_provider_slot (provider_id, date_meeting, time_slot)
 );
 
+-- ─── Booking photos ───────────────────────────────────────────────────────────
+-- Stores photos uploaded by the client (BEFORE) and provider (AFTER).
+--
+--  BEFORE  → client uploads 1-3 photos when creating the booking
+--            (shows the problem / work to be done)
+--  AFTER   → provider uploads 1-3 photos after scanning the QR code
+--            (proof that the work is done)
+--
+-- The 1-3 limit is enforced in the backend (INSERT guarded by COUNT check).
+CREATE TABLE IF NOT EXISTS booking_photos (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  booking_id  INT                    NOT NULL,
+  uploaded_by INT                    NOT NULL,          -- FK → users.id (client or provider)
+  type        ENUM('BEFORE','AFTER') NOT NULL,          -- BEFORE = client, AFTER = provider
+  url         VARCHAR(500)           NOT NULL,          -- stored path / cloud URL
+  description TEXT,                                     -- optional caption (client side only)
+  sort_order  TINYINT                DEFAULT 1,         -- 1, 2 or 3 — display order
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (booking_id)  REFERENCES bookings(id) ON DELETE CASCADE,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id)
+);
+
 -- ─── Messages (with negotiation support) ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS messages (
   id              INT AUTO_INCREMENT PRIMARY KEY,

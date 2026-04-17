@@ -71,7 +71,60 @@ router.patch('/:id/complete',    protect, restricted, role('PROVIDER'), complete
 router.patch('/:id/cancel',      protect, restricted,                   cancelBooking);
 router.post('/:id/review',       protect, restricted, role('CLIENT'),   createReview);
 
-// OFFER ROUTE
+// POST /api/bookings/:id/photos
+// Save a photo URL (BEFORE by client, AFTER by provider) — max 3 per type
+router.post('/:id/photos', protect, restricted, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { type, url, description, sort_order } = req.body;
+
+    // Validate input
+    if (!type || !['BEFORE', 'AFTER'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'type must be BEFORE or AFTER' });
+    }
+    if (!url) {
+      return res.status(400).json({ success: false, message: 'url is required' });
+    }
+
+    // Ensure booking exists and caller is part of it
+    const booking = await getBookingForUser(bookingId, req.user.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Role check: only client can add BEFORE photos, only provider can add AFTER photos
+    if (type === 'BEFORE' && booking.client_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the client can add BEFORE photos' });
+    }
+    if (type === 'AFTER' && booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the provider can add AFTER photos' });
+    }
+
+    // Enforce max 3 photos per booking per type
+    const [[{ count }]] = await pool.execute(
+      'SELECT COUNT(*) AS count FROM booking_photos WHERE booking_id = ? AND type = ?',
+      [bookingId, type]
+    );
+    if (count >= 3) {
+      return res.status(400).json({ success: false, message: `Maximum 3 ${type} photos allowed` });
+    }
+
+    const [result] = await pool.execute(
+      'INSERT INTO booking_photos (booking_id, uploaded_by, type, url, description, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [bookingId, req.user.id, type, url, description || null, sort_order || count + 1]
+    );
+
+    res.status(201).json({
+      success: true,
+      data: { id: result.insertId, booking_id: bookingId, type, url, sort_order: sort_order || count + 1 },
+    });
+  } catch (error) {
+    console.error('Photo upload error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+
 router.post('/:id/offer', protect, restricted, async (req, res) => {
   try {
     const { proposed_price } = req.body;
