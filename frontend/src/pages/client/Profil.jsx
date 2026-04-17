@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
+import { AuthContext } from "../../context/AuthContext";
 
 const MOROCCAN_CITIES = [
   "Casablanca",
@@ -43,7 +44,18 @@ const SERVICE_CATEGORIES = [
   "Plâtrerie",
 ];
 
+const WEEK_DAYS = [
+  { label: "Lun", value: 1 },
+  { label: "Mar", value: 2 },
+  { label: "Mer", value: 3 },
+  { label: "Jeu", value: 4 },
+  { label: "Ven", value: 5 },
+  { label: "Sam", value: 6 },
+  { label: "Dim", value: 7 },
+];
+
 const UserProfileScreen = ({ navigation }) => {
+  const { setUserRole: setAuthUserRole } = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -57,6 +69,8 @@ const UserProfileScreen = ({ navigation }) => {
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [userRole, setUserRole] = useState("client");
+  const [availabilityDays, setAvailabilityDays] = useState([1, 2, 3, 4, 5, 6, 7]);
+  const [savingAvailability, setSavingAvailability] = useState(false);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
@@ -110,7 +124,8 @@ const UserProfileScreen = ({ navigation }) => {
       const storedUser = await AsyncStorage.getItem("khidmati_user");
 
       if (!token) {
-        navigation.replace("Login");
+        setAuthUserRole(null);
+        navigation.replace("Auth");
         return;
       }
 
@@ -186,8 +201,69 @@ const UserProfileScreen = ({ navigation }) => {
         setDescription(profile.description || "");
         setCategoryId(profile.category_id?.toString() || "");
       }
+
+      await fetchProviderAvailability(userId, token);
     } catch (error) {
       console.log("Error fetching provider profile:", error);
+    }
+  };
+
+  const fetchProviderAvailability = async (providerId, token) => {
+    try {
+      const response = await fetch(`${API_URL}/providers/${providerId}/availability`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data)) {
+        const enabled = data.data
+          .filter((d) => d.is_available)
+          .map((d) => Number(d.day_of_week));
+        setAvailabilityDays(enabled);
+      }
+    } catch (error) {
+      console.log("Error fetching provider availability:", error);
+    }
+  };
+
+  const toggleAvailabilityDay = (dayValue) => {
+    if (savingAvailability || saving) return;
+    setAvailabilityDays((prev) =>
+      prev.includes(dayValue)
+        ? prev.filter((d) => d !== dayValue)
+        : [...prev, dayValue].sort((a, b) => a - b),
+    );
+  };
+
+  const saveAvailability = async () => {
+    if (!user?.id) return;
+    setSavingAvailability(true);
+    try {
+      const token = await AsyncStorage.getItem("khidmati_token");
+      const response = await fetch(`${API_URL}/providers/${user.id}/availability`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ available_days: availabilityDays }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        Alert.alert("Erreur", data.message || "Impossible de mettre à jour les disponibilités");
+        return;
+      }
+
+      Alert.alert("Succès", "Disponibilités mises à jour");
+    } catch (error) {
+      console.log("Error saving availability:", error);
+      Alert.alert("Erreur", "Impossible de mettre à jour les disponibilités");
+    } finally {
+      setSavingAvailability(false);
     }
   };
 
@@ -317,12 +393,14 @@ const UserProfileScreen = ({ navigation }) => {
       {
         text: "Déconnecter",
         style: "destructive",
-        onPress: async () => {
-          await AsyncStorage.removeItem("khidmati_token");
-          await AsyncStorage.removeItem("khidmati_user");
-          navigation.replace("Login");
-        },
-      },
+            onPress: async () => {
+              await AsyncStorage.removeItem("khidmati_token");
+              await AsyncStorage.removeItem("khidmati_user");
+              await AsyncStorage.removeItem("khidmati_role");
+              setAuthUserRole(null);
+              navigation.replace("Auth");
+            },
+          },
     ]);
   };
 
@@ -524,6 +602,50 @@ const UserProfileScreen = ({ navigation }) => {
                     style={styles.textArea}
                     editable={!saving}
                   />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Mes disponibilités</Text>
+                  <View style={styles.availabilityDaysList}>
+                    {WEEK_DAYS.map((day) => {
+                      const isActive = availabilityDays.includes(day.value);
+                      return (
+                        <TouchableOpacity
+                          key={day.value}
+                          style={[
+                            styles.availabilityDayChip,
+                            isActive && styles.availabilityDayChipActive,
+                          ]}
+                          onPress={() => toggleAvailabilityDay(day.value)}
+                          disabled={saving || savingAvailability}
+                          activeOpacity={0.8}
+                        >
+                          <Text
+                            style={[
+                              styles.availabilityDayChipText,
+                              isActive && styles.availabilityDayChipTextActive,
+                            ]}
+                          >
+                            {day.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.availabilitySaveButton,
+                      (saving || savingAvailability) && styles.saveButtonDisabled,
+                    ]}
+                    onPress={saveAvailability}
+                    disabled={saving || savingAvailability}
+                  >
+                    {savingAvailability ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.availabilitySaveButtonText}>Enregistrer</Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </>
             )}
@@ -792,6 +914,48 @@ const styles = StyleSheet.create({
   },
   categoryChipTextActive: {
     color: "#1A73E8",
+  },
+  availabilityDaysList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  availabilityDayChip: {
+    minWidth: 56,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+  },
+  availabilityDayChipActive: {
+    backgroundColor: "#E8F1FE",
+    borderColor: "#1A73E8",
+  },
+  availabilityDayChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  availabilityDayChipTextActive: {
+    color: "#1A73E8",
+  },
+  availabilitySaveButton: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    height: 40,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    backgroundColor: "#1A73E8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  availabilitySaveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
   saveButton: {
     height: 50,

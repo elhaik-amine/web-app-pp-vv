@@ -146,6 +146,7 @@ const NotificationsScreen = ({ navigation }) => {
       'MESSAGE': { icon: 'chatbubbles', color: '#64748B', name: 'material' },
       'NEGOTIATION': { icon: 'swap-horizontal', color: '#8B5CF6', name: 'ios' },
       'TOKEN': { icon: 'toll', color: '#FFB300', name: 'material' },
+      'TOKEN_REWARD': { icon: 'toll', color: '#FFB300', name: 'material' },
       'REVIEW': { icon: 'star', color: '#FFB300', name: 'ios' },
       'WARNING': { icon: 'alert-circle', color: '#F97316', name: 'ios' },
       'OFFER_REJECTED': { icon: 'close-circle', color: '#EF4444', name: 'ios' },
@@ -177,10 +178,11 @@ const NotificationsScreen = ({ navigation }) => {
       navigation.navigate('Negociation', { bookingId: item.data?.booking_id });
       break;
     case 'TOKEN':
+    case 'TOKEN_REWARD':
       navigation.navigate('WalletTokens');
       break;
     case 'REVIEW':
-      navigation.navigate('Avis', { bookingId: item.data?.booking_id });
+      navigation.navigate('BookingDetail', { bookingId: item.data?.booking_id });
       break;
     default:
       break;

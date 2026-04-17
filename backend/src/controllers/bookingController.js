@@ -36,6 +36,34 @@ const getAvailableSlots = async (req, res) => {
       return res.status(400).json({ success: false, message: 'provider_id and date are required' });
     }
 
+    const dateParts = String(date).split('-').map(Number);
+    if (dateParts.length !== 3 || dateParts.some(Number.isNaN)) {
+      return res.status(400).json({ success: false, message: 'date must be YYYY-MM-DD' });
+    }
+
+    const meetingDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    const jsDay = meetingDate.getDay(); // 0=Sun ... 6=Sat
+    const dayOfWeek = jsDay === 0 ? 7 : jsDay; // 1=Mon ... 7=Sun
+
+    const [availabilityRows] = await pool.execute(
+      `SELECT is_available
+       FROM provider_availability
+       WHERE provider_id = ? AND day_of_week = ?`,
+      [provider_id, dayOfWeek]
+    );
+
+    if (availabilityRows.length > 0 && Number(availabilityRows[0].is_available) !== 1) {
+      return res.json({
+        success: true,
+        data: {
+          date,
+          available: [],
+          taken: ALL_SLOTS,
+          provider_available: false,
+        },
+      });
+    }
+
     const [takenRows] = await pool.execute(
       `SELECT time_slot FROM bookings WHERE provider_id = ? AND date_meeting = ? AND status != 'CANCELLED'`,
       [provider_id, date]
@@ -44,7 +72,10 @@ const getAvailableSlots = async (req, res) => {
     const takenSlots = takenRows.map((r) => r.time_slot);
     const availableSlots = ALL_SLOTS.filter((slot) => !takenSlots.includes(slot));
 
-    res.json({ success: true, data: { date, available: availableSlots, taken: takenSlots } });
+    res.json({
+      success: true,
+      data: { date, available: availableSlots, taken: takenSlots, provider_available: true },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -530,6 +561,96 @@ const completeBooking = async (req, res) => {
   }
 };
 
+// ─── GET /api/bookings/:id/photos ─────────────────────────────────────────────
+const getBookingPhotos = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const booking = await getBooking(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (
+      booking.client_id !== req.user.id &&
+      booking.provider_id !== req.user.id &&
+      req.user.role !== 'ADMIN'
+    ) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT * FROM booking_photos WHERE booking_id = ? ORDER BY type, sort_order',
+      [bookingId]
+    );
+
+    const beforePhotos = rows.filter((p) => p.type === 'BEFORE').map((p) => p.url);
+    const afterPhotos = rows.filter((p) => p.type === 'AFTER').map((p) => p.url);
+
+    return res.json({
+      success: true,
+      data: { before: beforePhotos, after: afterPhotos },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── POST /api/bookings/:id/after-images ─────────────────────────────────────
+const uploadAfterImages = async (req, res) => {
+  try {
+    const { images } = req.body;
+    const bookingId = req.params.id;
+
+    console.log('Received images:', images);
+    console.log('Images count:', images?.length);
+
+    if (!images || images.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one image is required' });
+    }
+
+    const booking = await getBooking(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the provider can upload after images' });
+    }
+
+    if (booking.status !== 'IN_PROGRESS') {
+      return res.status(400).json({ success: false, message: `Cannot upload after images for status: ${booking.status}` });
+    }
+
+    for (let i = 0; i < images.length; i += 1) {
+      await pool.execute(
+        'INSERT INTO booking_photos (booking_id, uploaded_by, type, url, sort_order) VALUES (?, ?, ?, ?, ?)',
+        [bookingId, req.user.id, 'AFTER', images[i], i + 1]
+      );
+    }
+
+    await pool.execute("UPDATE bookings SET status = 'COMPLETED' WHERE id = ?", [bookingId]);
+
+    await createNotification(
+      booking.client_id,
+      'BOOKING_COMPLETED',
+      'Service Completed',
+      'Votre service est terminé. Laissez un avis !',
+      { booking_id: booking.id }
+    );
+
+    try {
+      const io = getIO();
+      io.to(`booking_${booking.id}`).emit('booking:completed', { booking_id: booking.id });
+      io.to(`user_${booking.client_id}`).emit('booking:completed', { booking_id: booking.id });
+    } catch (_) {}
+
+    res.json({ success: true, message: 'Images uploaded and service completed' });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ─── PATCH /api/bookings/:id/cancel ──────────────────────────────────────────
 const cancelBooking = async (req, res) => {
   try {
@@ -596,6 +717,36 @@ const createReview = async (req, res) => {
       [ratingRows[0].avg_rating, ratingRows[0].total, booking.provider_id]
     );
 
+    const safeComment = (comment || '').trim();
+    const shortComment = safeComment ? safeComment.substring(0, 50) : 'Sans commentaire';
+    await createNotification(
+      booking.provider_id,
+      'REVIEW',
+      'Nouvel avis',
+      `${req.user.name} vous a noté ${rating}/5 : "${shortComment}"`,
+      { booking_id: booking.id, rating, comment: safeComment || null }
+    );
+
+    if (rating >= 4) {
+      await pool.execute(
+        'UPDATE users SET token_balance = token_balance + 0.5 WHERE id = ?',
+        [booking.provider_id]
+      );
+
+      await pool.execute(
+        'INSERT INTO token_transactions (user_id, type, amount, description, booking_id) VALUES (?, ?, ?, ?, ?)',
+        [booking.provider_id, 'REWARD', 0.5, `Avis ${rating} étoiles`, booking.id]
+      );
+
+      await createNotification(
+        booking.provider_id,
+        'TOKEN_REWARD',
+        'Token reçu 🪙',
+        `Vous avez reçu +0.5 token pour votre avis ${rating} étoiles !`,
+        { booking_id: booking.id, amount: 0.5 }
+      );
+    }
+
     res.status(201).json({ success: true, message: 'Review submitted' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -618,5 +769,7 @@ module.exports = {
   scanQR,
   cancelBooking,
   completeBooking,
+  getBookingPhotos,
+  uploadAfterImages,
   createReview,
 };

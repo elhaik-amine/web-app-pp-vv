@@ -16,6 +16,8 @@ const {
   scanQR,
   cancelBooking,
   completeBooking,
+  getBookingPhotos,
+  uploadAfterImages,
   createReview,
 } = require('../controllers/bookingController');
 const { protect, role, restricted } = require('../middlewares/authMiddleware');
@@ -59,6 +61,7 @@ router.get('/slots', protect, restricted, getAvailableSlots);
 router.post('/',   protect, restricted, role('CLIENT'),   createBooking);
 router.get('/',    protect, restricted,                   getBookings);
 router.get('/:id', protect, restricted,                   getBookingById);
+router.get('/:id/photos', protect, getBookingPhotos);
 
 router.patch('/:id/confirm',     protect, restricted, role('PROVIDER'), confirmBooking);
 router.post('/:id/accept-price', protect, restricted,                   acceptPrice);
@@ -68,6 +71,7 @@ router.patch('/:id/reject',      protect, restricted,                   rejectBo
 // FIXED: Changed from CLIENT to PROVIDER
 router.post('/:id/scan-qr',      protect, restricted, role('PROVIDER'), scanQR);
 router.patch('/:id/complete',    protect, restricted, role('PROVIDER'), completeBooking);
+router.post('/:id/after-images', protect, restricted, role('PROVIDER'), uploadAfterImages);
 router.patch('/:id/cancel',      protect, restricted,                   cancelBooking);
 router.post('/:id/review',       protect, restricted, role('CLIENT'),   createReview);
 

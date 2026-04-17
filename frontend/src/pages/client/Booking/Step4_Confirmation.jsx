@@ -77,9 +77,12 @@ const BookingStep4Screen = ({ navigation, route }) => {
       }
       const bookingId = bookingData.data?.id || bookingData.id;
 
-      // ── Phase 3: Save photo URLs to booking_photos table ─────────────────
+      // ── Phase 3: Save client BEFORE photos to booking_photos table ───────
       setPhase('saving');
-      for (let i = 0; i < uploadedUrls.length; i++) {
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        const photoUrl = uploadedUrls[i] || photo.uri;
+
         await fetch(`${API_URL}/bookings/${bookingId}/photos`, {
           method: 'POST',
           headers: {
@@ -88,9 +91,9 @@ const BookingStep4Screen = ({ navigation, route }) => {
           },
           body: JSON.stringify({
             type: 'BEFORE',
-            url: uploadedUrls[i],
+            url: photoUrl,
             description: i === 0 ? description : null, // attach description to first photo
-            sort_order: i + 1,
+            sort_order: photo.sort_order || i + 1,
           }),
         });
       }

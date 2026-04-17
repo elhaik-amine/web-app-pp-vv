@@ -9,14 +9,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-const availability = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const availability = [
+  { label: 'Lun', value: 1 },
+  { label: 'Mar', value: 2 },
+  { label: 'Mer', value: 3 },
+  { label: 'Jeu', value: 4 },
+  { label: 'Ven', value: 5 },
+  { label: 'Sam', value: 6 },
+  { label: 'Dim', value: 7 },
+];
 
 const ProviderProfileScreen = ({ navigation, route }) => {
   const [provider, setProvider] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [bookedDays, setBookedDays] = useState([]);
+  const [availableDays, setAvailableDays] = useState([]);
   
   const { providerId } = route.params || {};
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -89,9 +97,8 @@ const ProviderProfileScreen = ({ navigation, route }) => {
   const fetchAvailability = async () => {
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
-      const today = new Date().toISOString().split('T')[0];
       
-      const response = await fetch(`${API_URL}/bookings/slots?provider_id=${providerId}&date=${today}`, {
+      const response = await fetch(`${API_URL}/providers/${providerId}/availability`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -100,11 +107,11 @@ const ProviderProfileScreen = ({ navigation, route }) => {
       
       const data = await response.json();
       
-      if (data.success && data.data) {
-        // Mark days as booked based on taken slots
-        const takenDays = data.data.taken || [];
-        // This is simplified - you can enhance based on your logic
-        setBookedDays([]);
+      if (data.success && Array.isArray(data.data)) {
+        const days = data.data
+          .filter(d => Number(d.is_available) === 1)
+          .map(d => Number(d.day_of_week));
+        setAvailableDays(days);
       }
     } catch (error) {
       console.log('Error fetching availability:', error);
@@ -230,14 +237,18 @@ const ProviderProfileScreen = ({ navigation, route }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Disponibilités</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.availabilityList}>
-            {availability.map((day) => {
-              const isBooked = bookedDays.includes(day);
+            {availability
+              .filter((day) => availableDays.includes(day.value))
+              .map((day) => {
               return (
-                <View key={day} style={[styles.dayChip, isBooked ? styles.dayChipDisabled : styles.dayChipActive]}>
-                  <Text style={[styles.dayText, isBooked ? styles.dayTextDisabled : styles.dayTextActive]}>{day}</Text>
+                <View key={day.value} style={[styles.dayChip, styles.dayChipActive]}>
+                  <Text style={[styles.dayText, styles.dayTextActive]}>{day.label}</Text>
                 </View>
               );
             })}
+            {availableDays.length === 0 && (
+              <Text style={styles.noAvailabilityText}>Aucune disponibilité renseignée</Text>
+            )}
           </ScrollView>
         </View>
 
@@ -308,11 +319,10 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 15, color: '#64748B', marginLeft: 8 },
   availabilityList: { paddingVertical: 4 },
   dayChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginRight: 10, borderWidth: 1 },
-  dayChipActive: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
-  dayChipDisabled: { backgroundColor: '#1A73E8', borderColor: '#1A73E8' },
+  dayChipActive: { backgroundColor: '#1A73E8', borderColor: '#1A73E8' },
   dayText: { fontSize: 14, fontWeight: '600' },
-  dayTextActive: { color: '#64748B' },
-  dayTextDisabled: { color: '#FFFFFF' },
+  dayTextActive: { color: '#FFFFFF' },
+  noAvailabilityText: { fontSize: 14, color: '#94A3B8', fontWeight: '600', paddingVertical: 10 },
   reviewCard: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, marginBottom: 12 },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   reviewAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },

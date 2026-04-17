@@ -2,17 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TextInput,
   TouchableOpacity, ScrollView, Image, FlatList,
-  ActivityIndicator, RefreshControl, Dimensions,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Import tab screens
-import ProviderListScreen from './ProviderList';
-import MesReservationsScreen from './MesReservations';
-import ProfilScreen from './Profil';
-
-const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
   const [categories, setCategories] = useState([]);
@@ -21,7 +14,6 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('home');
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -240,21 +232,6 @@ const HomeScreen = ({ navigation }) => {
     </ScrollView>
   );
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return renderHomeContent();
-      case 'search':
-        return <ProviderListScreen navigation={navigation} route={{ params: {} }} />;
-      case 'bookings':
-        return <MesReservationsScreen navigation={navigation} route={{ params: {} }} />;
-      case 'profile':
-        return <ProfilScreen navigation={navigation} route={{ params: {} }} />;
-      default:
-        return renderHomeContent();
-    }
-  };
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -268,42 +245,7 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {renderContent()}
-      
-      {/* Bottom Tab Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity 
-          style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]} 
-          onPress={() => setActiveTab('home')}
-        >
-          <Ionicons name={activeTab === 'home' ? 'home' : 'home-outline'} size={24} color={activeTab === 'home' ? '#1A73E8' : '#64748B'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Accueil</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.tabItem, activeTab === 'search' && styles.tabItemActive]} 
-          onPress={() => setActiveTab('search')}
-        >
-          <Ionicons name={activeTab === 'search' ? 'search' : 'search-outline'} size={24} color={activeTab === 'search' ? '#1A73E8' : '#64748B'} />
-          <Text style={[styles.tabLabel, activeTab === 'search' && styles.tabLabelActive]}>Recherche</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.tabItem, activeTab === 'bookings' && styles.tabItemActive]} 
-          onPress={() => setActiveTab('bookings')}
-        >
-          <Ionicons name={activeTab === 'bookings' ? 'calendar' : 'calendar-outline'} size={24} color={activeTab === 'bookings' ? '#1A73E8' : '#64748B'} />
-          <Text style={[styles.tabLabel, activeTab === 'bookings' && styles.tabLabelActive]}>Réservations</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.tabItem, activeTab === 'profile' && styles.tabItemActive]} 
-          onPress={() => setActiveTab('profile')}
-        >
-          <Ionicons name={activeTab === 'profile' ? 'person' : 'person-outline'} size={24} color={activeTab === 'profile' ? '#1A73E8' : '#64748B'} />
-          <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>Profil</Text>
-        </TouchableOpacity>
-      </View>
+      {renderHomeContent()}
     </SafeAreaView>
   );
 };
@@ -346,37 +288,7 @@ const styles = StyleSheet.create({
   reviewsText: { fontSize: 12, color: '#94A3B8' },
   priceText: { fontSize: 12, color: '#64748B' },
   priceValue: { fontSize: 14, fontWeight: '700', color: '#1A73E8' },
-  bottomSpacer: { height: 80 },
-  // Bottom Tab Bar Styles
-  bottomTabBar: { 
-    flexDirection: 'row', 
-    backgroundColor: '#FFFFFF', 
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderTopWidth: 1, 
-    borderTopColor: '#E2E8F0',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  tabItem: { 
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  tabLabel: { 
-    fontSize: 12, 
-    color: '#64748B', 
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  tabLabelActive: { 
-    color: '#1A73E8',
-    fontWeight: '600',
-  },
+  bottomSpacer: { height: 24 },
 });
 
 export default HomeScreen;

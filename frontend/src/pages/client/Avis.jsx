@@ -4,7 +4,7 @@ import {
   TextInput, ScrollView, Image, KeyboardAvoidingView, Platform,
   ActivityIndicator, Alert,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AvisScreen = ({ navigation, route }) => {
@@ -14,16 +14,39 @@ const AvisScreen = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState(null);
   const [existingReview, setExistingReview] = useState(null);
+  const [userRole, setUserRole] = useState('');
   
   const { bookingId } = route.params || {};
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const API_URL = 'http://192.168.1.10:5000/api';
 
   useEffect(() => {
+    checkUserRole();
     if (bookingId) {
       fetchBookingDetails();
       checkExistingReview();
     }
   }, [bookingId]);
+
+  const checkUserRole = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('khidmati_user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        setUserRole(user.role);
+        
+        // If user is PROVIDER, redirect to dashboard
+        if (user.role === 'PROVIDER') {
+          Alert.alert(
+            'Accès refusé',
+            'Seuls les clients peuvent laisser un avis',
+            [{ text: 'OK', onPress: () => navigation.replace('ProviderDashboard') }]
+          );
+        }
+      }
+    } catch (error) {
+      console.log('Error checking user role:', error);
+    }
+  };
 
   const fetchBookingDetails = async () => {
     try {
@@ -104,10 +127,8 @@ const AvisScreen = ({ navigation, route }) => {
       if (data.success) {
         Alert.alert(
           'Merci !', 
-          rating >= 4 
-            ? 'Votre avis a été publié. Le prestataire a reçu +0.5 token !' 
-            : 'Votre avis a été publié. Merci pour votre retour !',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          'Votre avis a été publié. Merci pour votre retour !',
+          [{ text: 'OK', onPress: () => navigation.navigate('MesReservations') }]
         );
       } else {
         Alert.alert('Erreur', data.message || 'Impossible de publier l\'avis');
@@ -140,6 +161,11 @@ const AvisScreen = ({ navigation, route }) => {
         </View>
       </SafeAreaView>
     );
+  }
+
+  // Block provider from seeing this page
+  if (userRole === 'PROVIDER') {
+    return null; // Will redirect in useEffect
   }
 
   if (!booking) {
@@ -230,7 +256,7 @@ const AvisScreen = ({ navigation, route }) => {
                 {booking.category_name || 'Service'}
               </Text>
               <Text style={styles.dateText}>
-                {formatDate(booking.booking_date)}
+                {formatDate(booking.date_meeting || booking.booking_date)}
               </Text>
             </View>
           </View>
@@ -268,17 +294,6 @@ const AvisScreen = ({ navigation, route }) => {
             </View>
           </View>
 
-          <View style={styles.rewardCard}>
-            <View style={styles.rewardIconBg}>
-              <MaterialCommunityIcons name="gift" size={24} color="#1A73E8" />
-            </View>
-            <View style={styles.rewardTextContainer}>
-              <Text style={styles.rewardTitle}>Bonne nouvelle !</Text>
-              <Text style={styles.rewardSubtitle}>
-                Une note de 4 ou 5 étoiles offre <Text style={styles.rewardHighlight}>+0.5 token</Text> au prestataire.
-              </Text>
-            </View>
-          </View>
           <View style={styles.bottomSpacer} />
         </ScrollView>
 
@@ -328,12 +343,6 @@ const styles = StyleSheet.create({
   ratingLabel: { textAlign: 'center', fontSize: 16, fontWeight: '700', color: '#FFB300' },
   textAreaContainer: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 16 },
   textArea: { height: 120, fontSize: 16, color: '#191C23', lineHeight: 24 },
-  rewardCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F7FF', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#D0E4FF' },
-  rewardIconBg: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginRight: 16, elevation: 2 },
-  rewardTextContainer: { flex: 1 },
-  rewardTitle: { fontSize: 15, fontWeight: '700', color: '#1A73E8', marginBottom: 2 },
-  rewardSubtitle: { fontSize: 13, color: '#64748B', lineHeight: 18 },
-  rewardHighlight: { fontWeight: '800', color: '#1A73E8' },
   alreadyReviewedCard: { alignItems: 'center', padding: 32, backgroundColor: '#F8FAFC', borderRadius: 20 },
   alreadyReviewedTitle: { fontSize: 18, fontWeight: '700', color: '#191C23', marginTop: 16, marginBottom: 8 },
   alreadyReviewedText: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 20 },

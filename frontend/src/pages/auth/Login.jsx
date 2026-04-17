@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AuthContext } from "../../context/AuthContext";
 
 const LoginScreen = ({ navigation }) => {
+  const { setUserRole } = useContext(AuthContext);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -49,16 +51,18 @@ const LoginScreen = ({ navigation }) => {
 
         await AsyncStorage.setItem("khidmati_token", accessToken);
         await AsyncStorage.setItem("khidmati_user", JSON.stringify(user));
+        await AsyncStorage.setItem("khidmati_role", user.role);
+        setUserRole(user.role);
 
         console.log("User role:", user.role);
 
         // Navigate based on role - CHANGE THIS LINE
         if (user.role === "CLIENT") {
-          navigation.replace("HomeClient"); // Changed from 'ClientTabs' to 'HomeClient'
+          navigation.replace("ClientApp");
         } else if (user.role === "PROVIDER") {
-          navigation.replace("ProviderDashboard");
+          navigation.replace("ProviderApp");
         } else if (user.role === "ADMIN") {
-          navigation.replace("AdminDashboard");
+          navigation.replace("AdminApp");
         } else {
           Alert.alert("Erreur", "Rôle utilisateur non reconnu");
         }
@@ -77,9 +81,15 @@ const LoginScreen = ({ navigation }) => {
 
           await AsyncStorage.setItem("khidmati_token", accessToken);
           await AsyncStorage.setItem("khidmati_user", JSON.stringify(user));
+          await AsyncStorage.setItem("khidmati_role", user.role);
+          setUserRole(user.role);
 
           if (user.role === "PROVIDER") {
-            navigation.replace("ProviderDashboard");
+            navigation.replace("ProviderApp");
+          } else if (user.role === "CLIENT") {
+            navigation.replace("ClientApp");
+          } else if (user.role === "ADMIN") {
+            navigation.replace("AdminApp");
           }
         } else {
           Alert.alert("Erreur", "Email ou mot de passe incorrect");
