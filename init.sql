@@ -48,12 +48,14 @@ CREATE TABLE IF NOT EXISTS provider_profiles (
   FOREIGN KEY (category_id) REFERENCES service_categories(id) ON DELETE SET NULL
 );
 
+
+
 -- ─── Bookings ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bookings (
   id              INT AUTO_INCREMENT PRIMARY KEY,
-  client_id       INT  NOT NULL,
-  provider_id     INT  NOT NULL,
-  booking_date    DATE NOT NULL,
+  client_id       INT          NOT NULL,
+  provider_id     INT          NOT NULL,
+  date_meeting    DATE         NOT NULL,               -- e.g. 2026-04-18
   time_slot       ENUM('08:00-12:00','12:00-15:00','15:00-18:00','18:00-21:00') NOT NULL,
   status          ENUM('PENDING','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED') DEFAULT 'PENDING',
   agreed_price    DECIMAL(10,2),
@@ -62,11 +64,11 @@ CREATE TABLE IF NOT EXISTS bookings (
   qr_active_from  DATETIME,
   qr_active_until DATETIME,
   notes           TEXT,
-  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- when the booking was submitted
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (client_id)   REFERENCES users(id),
   FOREIGN KEY (provider_id) REFERENCES users(id),
-  UNIQUE KEY uq_provider_slot (provider_id, booking_date, time_slot)
+  UNIQUE KEY uq_provider_slot (provider_id, date_meeting, time_slot)
 );
 
 -- ─── Messages (with negotiation support) ──────────────────────────────────────

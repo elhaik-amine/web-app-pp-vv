@@ -66,7 +66,6 @@ const updateProviderProfile = async (req, res) => {
   const { id } = req.params;
   const { category_id, description, city } = req.body;
 
-  // Basic validation
   if (!category_id || !city) {
     return res.status(400).json({
       message: "category_id and city are required",
@@ -98,4 +97,77 @@ const updateProviderProfile = async (req, res) => {
   }
 };
 
-module.exports = { getProviders, getProviderById, updateProviderProfile };
+// GET /api/providers/:id/availability
+// Returns all 28 slots (7 days x 4 time-slots) with AVAILABLE / BOOKED status
+const getProviderWeekAvailability = async (req, res) => {
+  try {
+    const providerId = req.params.id;
+
+    // Use local time parts — avoids toISOString() UTC off-by-one (e.g. UTC+1 at 00:30 = yesterday UTC)
+    const pad = (n) => String(n).padStart(2, "0");
+    const dates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    });
+
+    const [rows] = await pool.execute(
+      `SELECT
+          d.date_meeting,
+          DAYNAME(d.date_meeting) AS day_name,
+          s.time_slot,
+          CASE
+              WHEN b.id IS NOT NULL THEN 'BOOKED'
+              ELSE 'AVAILABLE'
+          END AS availability
+       FROM
+          (SELECT ? AS date_meeting UNION ALL SELECT ? UNION ALL SELECT ?
+           UNION ALL SELECT ? UNION ALL SELECT ? UNION ALL SELECT ? UNION ALL SELECT ?) AS d
+          CROSS JOIN (
+            SELECT '08:00-12:00' AS time_slot UNION ALL
+            SELECT '12:00-15:00'              UNION ALL
+            SELECT '15:00-18:00'              UNION ALL
+            SELECT '18:00-21:00'
+          ) AS s
+          LEFT JOIN bookings b
+              ON  b.provider_id = ?
+              AND b.date_meeting = d.date_meeting
+              AND b.time_slot   = s.time_slot
+              AND b.status NOT IN ('CANCELLED')
+       ORDER BY d.date_meeting, s.time_slot`,
+      [...dates, providerId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "Provider not found" });
+    }
+
+    // Group rows by date — read date parts directly to avoid any tz shift
+    const grouped = {};
+    for (const row of rows) {
+      const rawDate = row.date_meeting;
+      const key =
+        typeof rawDate === "string"
+          ? rawDate
+          : `${rawDate.getFullYear()}-${pad(rawDate.getMonth() + 1)}-${pad(rawDate.getDate())}`;
+
+      if (!grouped[key]) {
+        grouped[key] = { date: key, day_name: row.day_name, slots: [] };
+      }
+      grouped[key].slots.push({
+        time_slot: row.time_slot,
+        availability: row.availability,
+      });
+    }
+
+    res.json({
+      success: true,
+      provider_id: Number(providerId),
+      week: Object.values(grouped),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getProviders, getProviderById, updateProviderProfile, getProviderWeekAvailability };
