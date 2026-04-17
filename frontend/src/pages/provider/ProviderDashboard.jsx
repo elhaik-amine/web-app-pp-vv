@@ -398,26 +398,6 @@ const ProviderDashboard = ({ navigation }) => {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
-
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItemActive} onPress={() => navigation.replace('ProviderDashboard')}>
-          <Ionicons name="home" size={24} color="#1A73E8" />
-          <Text style={[styles.navLabel, styles.navLabelActive]}>Accueil</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('MesReservations')}>
-          <Ionicons name="calendar" size={24} color="#94A3B8" />
-          <Text style={styles.navLabel}>Missions</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('QRScanner')}>
-          <Ionicons name="scan" size={24} color="#94A3B8" />
-          <Text style={styles.navLabel}>Scanner</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Profil')}>
-          <Ionicons name="person-outline" size={24} color="#94A3B8" />
-          <Text style={styles.navLabel}>Profil</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -483,11 +463,6 @@ const styles = StyleSheet.create({
   confirmedBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 12, marginTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
   confirmedText: { fontSize: 14, fontWeight: '600', color: '#10B981', marginLeft: 6 },
   bottomSpacer: { height: 20 },
-  bottomNav: { position: 'absolute', bottom: 0, width: '100%', height: 84, backgroundColor: '#FFFFFF', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingBottom: 20, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  navItem: { alignItems: 'center', justifyContent: 'center' },
-  navItemActive: { alignItems: 'center', justifyContent: 'center' },
-  navLabel: { fontSize: 10, color: '#94A3B8', marginTop: 4 },
-  navLabelActive: { color: '#1A73E8', fontWeight: '700' },
 });
 
 export default ProviderDashboard;
