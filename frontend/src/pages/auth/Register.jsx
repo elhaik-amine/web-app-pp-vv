@@ -110,30 +110,52 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   const uploadAvatarToCloudinary = async (imageUri) => {
-    if (!CLOUDINARY_URL || !CLOUDINARY_PRESET) {
-      throw new Error("Missing Cloudinary env vars");
-    }
+    console.log("1. Starting upload, URI:", imageUri);
 
-    const formData = new FormData();
-    formData.append("file", {
-      uri: imageUri,
-      type: "image/jpeg",
-      name: `provider_avatar_${Date.now()}.jpg`,
-    });
-    formData.append("upload_preset", CLOUDINARY_PRESET);
+  // TEMPORARY TEST
+  const test = await fetch("https://jsonplaceholder.typicode.com/todos/1");
+  console.log("Internet test:", test.status); // should log 200
+  console.log("1. Starting upload, URI:", imageUri);
+  console.log("2. CLOUDINARY_URL:", CLOUDINARY_URL);
+  console.log("3. CLOUDINARY_PRESET:", CLOUDINARY_PRESET);
 
+  const filename = imageUri.split('/').pop();
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : 'image/jpeg';
+  
+  console.log("4. filename:", filename);
+  console.log("5. type:", type);
+
+  const formData = new FormData();
+  formData.append("file", {
+    uri: imageUri,
+    type,
+    name: filename || `avatar_${Date.now()}.jpg`,
+  });
+  formData.append("upload_preset", CLOUDINARY_PRESET);
+
+  console.log("6. FormData ready, about to fetch...");
+
+  try {
     const response = await fetch(CLOUDINARY_URL, {
       method: "POST",
       body: formData,
     });
+
+    console.log("7. Response status:", response.status);
     const data = await response.json();
+    console.log("8. Response data:", JSON.stringify(data));
 
     if (!response.ok || !data.secure_url) {
       throw new Error(data.error?.message || "Cloudinary upload failed");
     }
 
     return data.secure_url;
-  };
+  } catch (err) {
+    console.log("9. Fetch error:", err.message, err);
+    throw err;
+  }
+};
 
   const pickAvatar = async () => {
     try {
