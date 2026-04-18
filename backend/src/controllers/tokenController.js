@@ -37,13 +37,13 @@ const getHistory = async (req, res) => {
 // Tokens are credited ONLY after the webhook confirms payment.
 const buyTokens = async (req, res) => {
   try {
-    const { token_amount } = req.body;
+    const { amount } = req.body;
 
-    if (!token_amount || token_amount <= 0 || !Number.isInteger(Number(token_amount))) {
-      return res.status(400).json({ success: false, message: 'token_amount must be a positive integer' });
+    if (!amount || amount <= 0 || !Number.isInteger(Number(amount))) {
+      return res.status(400).json({ success: false, message: 'amount must be a positive integer' });
     }
 
-    const tokens = Number(token_amount);
+    const tokens = Number(amount);
     const amountCentimes = tokens * PRICE_PER_TOKEN; // total in smallest unit
 
     // Create a PaymentIntent with metadata so the webhook knows what to credit
