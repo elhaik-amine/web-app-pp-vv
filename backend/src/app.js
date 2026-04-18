@@ -19,6 +19,7 @@ const reportRoutes = require("./routes/reportRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
+const availabilityRoutes = require("./routes/availabilityRoutes");
 
 const app = express();
 app.use(morgan("dev"));
@@ -58,6 +59,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/availability", availabilityRoutes);
 
 // Error handling
 app.use(notFound);

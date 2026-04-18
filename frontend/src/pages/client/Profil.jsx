@@ -210,7 +210,7 @@ const UserProfileScreen = ({ navigation }) => {
 
   const fetchProviderAvailability = async (providerId, token) => {
     try {
-      const response = await fetch(`${API_URL}/providers/${providerId}/availability`, {
+      const response = await fetch(`${API_URL}/availability/${providerId}/availability`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -243,7 +243,7 @@ const UserProfileScreen = ({ navigation }) => {
     setSavingAvailability(true);
     try {
       const token = await AsyncStorage.getItem("khidmati_token");
-      const response = await fetch(`${API_URL}/providers/${user.id}/availability`, {
+      const response = await fetch(`${API_URL}/availability/${user.id}/availability`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
