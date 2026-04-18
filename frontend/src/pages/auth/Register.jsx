@@ -225,9 +225,11 @@ const RegisterScreen = ({ navigation }) => {
             text: "OK",
             onPress: () => {
               if (user.role === "CLIENT") {
-                navigation.replace("HomeClient");
+                navigation.replace("ClientApp");
               } else if (user.role === "PROVIDER") {
-                navigation.replace("ProviderDashboard");
+                navigation.replace("ProviderApp");
+              } else if (user.role === "ADMIN") {
+                navigation.replace("AdminApp");
               }
             },
           },
