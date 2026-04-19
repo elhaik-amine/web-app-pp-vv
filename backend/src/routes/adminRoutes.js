@@ -3,10 +3,13 @@ const router = express.Router();
 const {
   getDashboard, getUsers, warnUser, restrictUser, suspendUser, deleteUser,
   getReports, updateReport, getBookings, completeBooking, getTokenStats,
+  loginAdmin,
 } = require('../controllers/adminController');
 const { protect, role } = require('../middlewares/authMiddleware');
 
 const admin = [protect, role('ADMIN')];
+
+router.post('/login', loginAdmin);
 
 router.get('/dashboard',              ...admin, getDashboard);
 router.get('/users',                  ...admin, getUsers);
