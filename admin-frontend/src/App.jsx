@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminReports from './pages/AdminReports';
+import AdminUsers from './pages/AdminUsers';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -54,6 +55,17 @@ const App = () => {
             <ProtectedRoute>
               <AdminLayout>
                 <AdminReports />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path="/users" 
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <AdminUsers />
               </AdminLayout>
             </ProtectedRoute>
           } 
