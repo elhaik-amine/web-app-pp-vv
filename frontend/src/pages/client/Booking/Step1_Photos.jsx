@@ -2,22 +2,28 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TextInput,
   TouchableOpacity, ScrollView, Image, KeyboardAvoidingView, Platform,
-  Alert, ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
+const MAX_PHOTOS = 3;
+
 const BookingStep1Screen = ({ navigation, route }) => {
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  
+
   const { providerId, providerName } = route.params || {};
 
   const pickImage = async () => {
+    if (photos.length >= MAX_PHOTOS) {
+      Alert.alert('Limite atteinte', `Vous ne pouvez ajouter que ${MAX_PHOTOS} photos maximum`);
+      return;
+    }
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission refusée', 'Vous devez autoriser l\'accès à la galerie');
+      Alert.alert('Permission refusée', "Vous devez autoriser l'accès à la galerie");
       return;
     }
 
@@ -27,10 +33,8 @@ const BookingStep1Screen = ({ navigation, route }) => {
       quality: 0.7,
     });
 
-    if (!result.canceled && photos.length < 5) {
+    if (!result.canceled) {
       setPhotos([...photos, { id: Date.now().toString(), uri: result.assets[0].uri }]);
-    } else if (photos.length >= 5) {
-      Alert.alert('Limite atteinte', 'Vous ne pouvez ajouter que 5 photos maximum');
     }
   };
 
@@ -41,8 +45,12 @@ const BookingStep1Screen = ({ navigation, route }) => {
       Alert.alert('Erreur', 'Veuillez décrire votre problème');
       return;
     }
-    
-navigation.replace('Step2', { providerId, providerName, description, photos });  };
+    if (photos.length === 0) {
+      Alert.alert('Erreur', 'Veuillez ajouter au moins 1 photo du problème');
+      return;
+    }
+    navigation.replace('Step2', { providerId, providerName, description, photos });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -80,15 +88,23 @@ navigation.replace('Step2', { providerId, providerName, description, photos }); 
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Photos du problème (2-5 photos)</Text>
-            <TouchableOpacity style={styles.uploadZone} onPress={pickImage}>
-              <View style={styles.uploadIconContainer}>
-                <Ionicons name="camera" size={32} color="#1A73E8" />
-              </View>
-              <Text style={styles.uploadText}>Appuyez pour ajouter des photos</Text>
-              <Text style={styles.uploadSubtext}>{photos.length}/5 photos</Text>
-            </TouchableOpacity>
-            
+            <Text style={styles.sectionTitle}>
+              Photos du problème{' '}
+              <Text style={photos.length === 0 ? styles.countRequired : styles.countOk}>
+                ({photos.length}/{MAX_PHOTOS})
+              </Text>
+            </Text>
+
+            {photos.length < MAX_PHOTOS && (
+              <TouchableOpacity style={styles.uploadZone} onPress={pickImage}>
+                <View style={styles.uploadIconContainer}>
+                  <Ionicons name="camera" size={32} color="#1A73E8" />
+                </View>
+                <Text style={styles.uploadText}>Appuyez pour ajouter des photos</Text>
+                <Text style={styles.uploadSubtext}>1 photo minimum • {MAX_PHOTOS} maximum</Text>
+              </TouchableOpacity>
+            )}
+
             {photos.length > 0 && (
               <View style={styles.photoGrid}>
                 {photos.map((photo) => (
@@ -101,14 +117,19 @@ navigation.replace('Step2', { providerId, providerName, description, photos }); 
                 ))}
               </View>
             )}
-            
-            <Text style={styles.noteText}>⚠️ Les photos aident le prestataire à mieux comprendre votre besoin</Text>
+
+            <Text style={styles.noteText}>
+              ⚠️ Les photos aident le prestataire à mieux comprendre votre besoin
+            </Text>
           </View>
           <View style={styles.bottomSpacer} />
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+          <TouchableOpacity
+            style={[styles.continueButton, (photos.length === 0 || !description.trim()) && styles.continueButtonDisabled]}
+            onPress={handleContinue}
+          >
             <Text style={styles.continueButtonText}>Continuer →</Text>
           </TouchableOpacity>
         </View>
@@ -130,6 +151,8 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 24 },
   section: { marginBottom: 32 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#191C23', marginBottom: 16 },
+  countRequired: { color: '#EF4444', fontWeight: '600' },
+  countOk: { color: '#10B981', fontWeight: '600' },
   textAreaContainer: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 16 },
   textArea: { height: 120, fontSize: 16, color: '#191C23', lineHeight: 24 },
   uploadZone: { height: 140, borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', marginBottom: 20 },
@@ -137,13 +160,14 @@ const styles = StyleSheet.create({
   uploadText: { fontSize: 14, color: '#64748B' },
   uploadSubtext: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
-  photoWrapper: { width: 80, height: 80, marginRight: 12, marginBottom: 12, position: 'relative' },
+  photoWrapper: { width: 90, height: 90, marginRight: 12, marginBottom: 12, position: 'relative' },
   thumbnail: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#F1F5F9' },
   removeBadge: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
   noteText: { fontSize: 12, color: '#94A3B8', lineHeight: 18 },
   bottomSpacer: { height: 100 },
   footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 34 : 24, paddingTop: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   continueButton: { backgroundColor: '#1A73E8', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  continueButtonDisabled: { backgroundColor: '#94A3B8', elevation: 0 },
   continueButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });
 

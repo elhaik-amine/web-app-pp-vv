@@ -1,82 +1,117 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
-  ScrollView, Dimensions, FlatList, ActivityIndicator, Alert,
+  ScrollView, FlatList, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width } = Dimensions.get('window');
-
-const timeSlots = [
+const TIME_SLOTS = [
   { id: '1', time: '08:00-12:00', period: 'Matin' },
   { id: '2', time: '12:00-15:00', period: 'Midi' },
   { id: '3', time: '15:00-18:00', period: 'Après-midi' },
   { id: '4', time: '18:00-21:00', period: 'Soir' },
 ];
 
+// Build YYYY-MM-DD from local clock (avoids toISOString UTC off-by-one)
+const pad = (n) => String(n).padStart(2, '0');
+const toLocalDateString = (d) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 const BookingStep3Screen = ({ navigation, route }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [availableSlots, setAvailableSlots] = useState([]);
+  const [availableDays, setAvailableDays] = useState([]);
+  const [availableSlotsForDate, setAvailableSlotsForDate] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [daysInMonth, setDaysInMonth] = useState([]);
-  
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [days, setDays] = useState([]);
+
   const { providerId, providerName, description, photos, proposedPrice } = route.params || {};
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-  const weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-
-  // Generate next 60 days starting from today
+  // Generate next 7 days starting from today
   const generateDays = () => {
-    const days = [];
+    const nextDays = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    for (let i = 0; i < 60; i++) {
+    const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
+    for (let i = 0; i < 7; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
-      days.push({
-        date: date,
-        day: date.getDate(),
-        month: date.getMonth(),
-        year: date.getFullYear(),
-        isPast: i < 0,
-        dateString: date.toISOString().split('T')[0],
+
+      nextDays.push({
+        id: i,
+        date,
+        dayNumber: date.getDate(),
+        dayName: dayNames[date.getDay()],
+        dateString: toLocalDateString(date),
+        isPast: date < today,
       });
     }
-    return days;
+    return nextDays;
   };
 
   useEffect(() => {
-    setDaysInMonth(generateDays());
+    setDays(generateDays());
+    fetchProviderAvailability();
   }, []);
 
-  const checkAvailability = async (date, slot) => {
-    setLoading(true);
+  const fetchProviderAvailability = async () => {
+    setLoadingAvailability(true);
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
-      const formattedDate = date.toISOString().split('T')[0];
-      
-      const response = await fetch(`${API_URL}/bookings/slots?provider_id=${providerId}&date=${formattedDate}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const response = await fetch(`${API_URL}/providers/${providerId}/availability`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
       const data = await response.json();
-      if (data.success) {
-        const isAvailable = !data.data.taken.includes(slot.time);
-        if (!isAvailable) {
-          Alert.alert('Indisponible', 'Ce créneau est déjà réservé');
-          return false;
+      if (data.success && Array.isArray(data.data)) {
+        const availableDays = data.data
+          .filter((d) => d.is_available)
+          .map((d) => Number(d.day_of_week));
+        setAvailableDays(availableDays);
+      }
+    } catch (err) {
+      console.log('Availability fetch error:', err);
+    } finally {
+      setLoadingAvailability(false);
+    }
+  };
+
+  const toDayOfWeek = (date) => {
+    const jsDay = date.getDay(); // 0=Sun ... 6=Sat
+    return jsDay === 0 ? 7 : jsDay; // 1=Mon ... 7=Sun
+  };
+
+  // Day mapping: 1=Monday, 2=Tuesday, ..., 7=Sunday
+  const isDateAvailable = (date) => {
+    const mappedDay = toDayOfWeek(date);
+    return availableDays.includes(mappedDay);
+  };
+
+  const fetchAvailableSlots = async (dateValue) => {
+    setLoadingSlots(true);
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const dateString = toLocalDateString(dateValue);
+      const response = await fetch(
+        `${API_URL}/bookings/slots?provider_id=${providerId}&date=${dateString}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const data = await response.json();
+      if (data.success && data.data) {
+        setAvailableSlotsForDate(data.data.available || []);
+        if (selectedSlot && !data.data.available?.includes(selectedSlot.time)) {
+          setSelectedSlot(null);
         }
       }
-      return true;
-    } catch (error) {
-      console.log('Error checking availability:', error);
-      return true;
+    } catch (err) {
+      console.log('Slots fetch error:', err);
+      setAvailableSlotsForDate([]);
     } finally {
-      setLoading(false);
+      setLoadingSlots(false);
     }
   };
 
@@ -90,29 +125,32 @@ const BookingStep3Screen = ({ navigation, route }) => {
       return;
     }
     
-    const isAvailable = await checkAvailability(selectedDate, selectedSlot);
-    if (isAvailable) {
-      navigation.replace('Step4', { 
-        providerId, 
-        providerName, 
-        description, 
-        photos, 
-        proposedPrice,
-        bookingDate: selectedDate.toISOString().split('T')[0],
-        timeSlot: selectedSlot.time,
-      });
+    const dateDayOfWeek = toDayOfWeek(selectedDate);
+    if (!availableDays.includes(dateDayOfWeek)) {
+      Alert.alert('Date indisponible', 'Ce prestataire n’est pas disponible ce jour.');
+      return;
     }
-  };
 
-  const formatMonth = (date) => {
-    return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    const dateStr = toLocalDateString(selectedDate);
+
+    navigation.replace('Step4', {
+      providerId,
+      providerName,
+      description,
+      photos,
+      proposedPrice,
+      bookingDate: dateStr,
+      timeSlot: selectedSlot.time,
+    });
   };
 
   const isDateDisabled = (day) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return day.date < today;
+    return day.isPast || day.date < today;
   };
+
+  const isDateUnavailable = (day) => !isDateAvailable(day.date);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -135,77 +173,117 @@ const BookingStep3Screen = ({ navigation, route }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Choisissez une date</Text>
-            <Text style={styles.monthText}>{formatMonth(currentMonth)}</Text>
+            {loadingAvailability && <ActivityIndicator size="small" color="#1A73E8" />}
           </View>
-          
-          <View style={styles.calendarContainer}>
-            <View style={styles.weekRow}>
-              {weekDays.map(day => <Text key={day} style={styles.weekDayText}>{day}</Text>)}
-            </View>
-            <View style={styles.daysGrid}>
-              {daysInMonth.map((day, index) => {
-                const isSelected = selectedDate?.toDateString() === day.date.toDateString();
-                const isDisabled = isDateDisabled(day);
-                const dayOfWeek = day.date.getDay();
-                const adjustedDayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-                
-                // Add margin for first week
-                const marginLeft = index === 0 ? adjustedDayOfWeek * (width / 7) : 0;
-                
-                return (
-                  <TouchableOpacity 
-                    key={index} 
-                    onPress={() => !isDisabled && setSelectedDate(day.date)}
-                    disabled={isDisabled}
-                    style={[
-                      styles.dayButton, 
-                      isSelected && styles.dayButtonActive,
-                      { marginLeft: marginLeft },
-                      isDisabled && styles.dayButtonDisabled
-                    ]}
-                  >
-                    <Text style={[
-                      styles.dayText, 
-                      isSelected && styles.dayTextActive,
-                      isDisabled && styles.dayTextDisabled
-                    ]}>
-                      {day.day}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Choisissez un créneau horaire</Text>
-          <FlatList 
-            data={timeSlots} 
-            renderItem={({ item }) => {
-              const isSelected = selectedSlot?.id === item.id;
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
+            {days.map((day) => {
+              const isSelected = selectedDate?.toDateString() === day.date.toDateString();
+              const isUnavailable = isDateUnavailable(day);
+              const isDisabled = isDateDisabled(day) || isUnavailable;
+
               return (
-                <TouchableOpacity 
-                  style={[styles.slotCard, isSelected && styles.slotCardActive]} 
-                  onPress={() => setSelectedSlot(item)}>
-                  <Text style={[styles.slotTime, isSelected && styles.slotTextActive]}>{item.time}</Text>
-                  <Text style={[styles.slotPeriod, isSelected && styles.slotTextActive]}>{item.period}</Text>
-                  {isSelected && <View style={styles.slotCheck}><Ionicons name="checkmark-circle" size={18} color="#FFFFFF" /></View>}
+                <TouchableOpacity
+                  key={day.id}
+                  style={[
+                    styles.dayCard,
+                    isSelected && styles.dayCardActive,
+                    isDisabled && styles.dayCardDisabled,
+                  ]}
+                  onPress={() => {
+                    if (isDisabled) return;
+                    setSelectedDate(day.date);
+                    setSelectedSlot(null);
+                    fetchAvailableSlots(day.date);
+                  }}
+                  disabled={isDisabled}
+                >
+                  <Text style={[
+                    styles.dayNumber,
+                    isSelected && styles.dayNumberActive,
+                  ]}>
+                    {day.dayNumber}
+                  </Text>
+                  <Text style={[
+                    styles.dayName,
+                    isSelected && styles.dayNameActive,
+                  ]}>
+                    {day.dayName}
+                  </Text>
                 </TouchableOpacity>
               );
-            }} 
-            keyExtractor={(item) => item.id} 
-            numColumns={2} 
-            scrollEnabled={false} 
-            columnWrapperStyle={styles.slotRow} 
-          />
+            })}
+          </ScrollView>
         </View>
+
+        {selectedDate && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Choisissez un créneau horaire</Text>
+            {loadingSlots && <ActivityIndicator size="small" color="#1A73E8" style={{ marginBottom: 12 }} />}
+            <FlatList
+              data={TIME_SLOTS}
+              renderItem={({ item }) => {
+                const isSelected = selectedSlot?.id === item.id;
+                const isAvailableSlot = availableSlotsForDate.includes(item.time);
+
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.slotCard,
+                      isSelected && styles.slotCardActive,
+                      !isAvailableSlot && styles.slotCardBooked,
+                    ]}
+                    onPress={() => {
+                      if (!isAvailableSlot) {
+                        Alert.alert('Créneau indisponible', 'Ce créneau est déjà réservé.');
+                        return;
+                      }
+                      setSelectedSlot(item);
+                    }}
+                    disabled={!isAvailableSlot}
+                  >
+                    <Text style={[
+                      styles.slotTime,
+                      isSelected && styles.slotTextActive,
+                      !isAvailableSlot && styles.slotTextBooked,
+                    ]}>
+                      {item.time}
+                    </Text>
+                    <Text style={[
+                      styles.slotPeriod,
+                      isSelected && styles.slotTextActive,
+                      !isAvailableSlot && styles.slotTextBooked,
+                    ]}>
+                      {!isAvailableSlot ? '🔒 Indisponible' : item.period}
+                    </Text>
+                    {isSelected && (
+                      <View style={styles.slotCheck}>
+                        <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              scrollEnabled={false}
+              columnWrapperStyle={styles.slotRow}
+            />
+          </View>
+        )}
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.continueButton} onPress={handleContinue} disabled={loading}>
-          {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.continueButtonText}>Continuer →</Text>}
+        <TouchableOpacity
+          style={[styles.continueButton, loading && styles.continueButtonDisabled]}
+          onPress={handleContinue}
+          disabled={loading}
+        >
+          {loading
+            ? <ActivityIndicator color="#FFFFFF" />
+            : <Text style={styles.continueButtonText}>Continuer →</Text>
+          }
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -226,27 +304,57 @@ const styles = StyleSheet.create({
   section: { marginBottom: 32 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#191C23' },
-  monthText: { fontSize: 14, fontWeight: '600', color: '#1A73E8' },
-  calendarContainer: { backgroundColor: '#F8FAFC', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-  weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  weekDayText: { width: (width - 112) / 7, textAlign: 'center', fontSize: 12, color: '#94A3B8', fontWeight: '600' },
-  daysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayButton: { width: (width - 112) / 7, height: 44, alignItems: 'center', justifyContent: 'center', marginVertical: 4, borderRadius: 12 },
-  dayButtonActive: { backgroundColor: '#1A73E8', elevation: 4 },
-  dayButtonDisabled: { opacity: 0.3 },
-  dayText: { fontSize: 14, fontWeight: '600', color: '#191C23' },
-  dayTextActive: { color: '#FFFFFF', fontWeight: '800' },
-  dayTextDisabled: { color: '#94A3B8' },
+  daysScroll: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  dayCard: {
+    width: 60,
+    height: 80,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dayCardActive: {
+    backgroundColor: '#1A73E8',
+    borderColor: '#1A73E8',
+  },
+  dayCardDisabled: {
+    opacity: 0.4,
+  },
+  dayNumber: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#191C23',
+    marginBottom: 4,
+  },
+  dayNumberActive: {
+    color: '#FFFFFF',
+  },
+  dayName: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  dayNameActive: {
+    color: '#FFFFFF',
+  },
   slotRow: { justifyContent: 'space-between' },
   slotCard: { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', position: 'relative' },
   slotCardActive: { backgroundColor: '#1A73E8', borderColor: '#1A73E8', elevation: 4 },
+  slotCardBooked: { backgroundColor: '#F8FAFC', borderColor: '#F1F5F9', opacity: 0.6 },
   slotTime: { fontSize: 14, fontWeight: '700', color: '#191C23', marginBottom: 4 },
   slotPeriod: { fontSize: 12, color: '#64748B' },
   slotTextActive: { color: '#FFFFFF' },
+  slotTextBooked: { color: '#94A3B8' },
   slotCheck: { position: 'absolute', top: 12, right: 12 },
   bottomSpacer: { height: 100 },
   footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 24, paddingBottom: 34, paddingTop: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   continueButton: { backgroundColor: '#1A73E8', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  continueButtonDisabled: { opacity: 0.6 },
   continueButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });
 

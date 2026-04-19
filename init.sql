@@ -1,4 +1,4 @@
--- Khidmati Database Schema - Updated Version
+-- Khidmati Database Schema - Final Version
 
 CREATE DATABASE IF NOT EXISTS khidmati;
 USE khidmati;
@@ -48,14 +48,24 @@ CREATE TABLE IF NOT EXISTS provider_profiles (
   FOREIGN KEY (category_id) REFERENCES service_categories(id) ON DELETE SET NULL
 );
 
-
+-- ─── Provider Availability ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS provider_availability (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  provider_id INT NOT NULL,
+  day_of_week TINYINT NOT NULL COMMENT '1=Lundi, 2=Mardi, 3=Mercredi, 4=Jeudi, 5=Vendredi, 6=Samedi, 7=Dimanche',
+  is_available TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (provider_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_provider_day (provider_id, day_of_week)
+);
 
 -- ─── Bookings ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bookings (
   id              INT AUTO_INCREMENT PRIMARY KEY,
-  client_id       INT          NOT NULL,
-  provider_id     INT          NOT NULL,
-  date_meeting    DATE         NOT NULL,               -- e.g. 2026-04-18
+  client_id       INT  NOT NULL,
+  provider_id     INT  NOT NULL,
+  date_meeting    DATE NOT NULL,
   time_slot       ENUM('08:00-12:00','12:00-15:00','15:00-18:00','18:00-21:00') NOT NULL,
   status          ENUM('PENDING','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED') DEFAULT 'PENDING',
   agreed_price    DECIMAL(10,2),
@@ -64,14 +74,28 @@ CREATE TABLE IF NOT EXISTS bookings (
   qr_active_from  DATETIME,
   qr_active_until DATETIME,
   notes           TEXT,
-  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- when the booking was submitted
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (client_id)   REFERENCES users(id),
   FOREIGN KEY (provider_id) REFERENCES users(id),
   UNIQUE KEY uq_provider_slot (provider_id, date_meeting, time_slot)
 );
 
--- ─── Messages (with negotiation support) ──────────────────────────────────────
+-- ─── Booking Photos ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS booking_photos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT NOT NULL,
+  uploaded_by INT NOT NULL,
+  type ENUM('BEFORE','AFTER') NOT NULL,
+  url VARCHAR(500) NOT NULL,
+  description TEXT,
+  sort_order TINYINT DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id)
+);
+
+-- ─── Messages ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS messages (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   booking_id      INT NOT NULL,
@@ -85,7 +109,7 @@ CREATE TABLE IF NOT EXISTS messages (
   FOREIGN KEY (sender_id)  REFERENCES users(id)
 );
 
--- ─── Price Acceptances (double confirmation for price) ────────────────────────
+-- ─── Price Acceptances ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS price_acceptances (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   booking_id INT NOT NULL,
@@ -145,7 +169,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE TABLE IF NOT EXISTS token_transactions (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   user_id     INT NOT NULL,
-  type        ENUM('PURCHASE','DEDUCTION','REWARD') NOT NULL,
+  type        ENUM('PURCHASE','DEDUCTION','REWARD','SPEND') NOT NULL,
+
   amount      DECIMAL(10,2) NOT NULL,
   description VARCHAR(255),
   booking_id  INT,
@@ -180,3 +205,10 @@ INSERT INTO users (name, email, password, phone, role, status, token_balance) VA
 -- ─── Insert provider profile for test provider ────────────────────────────────
 INSERT INTO provider_profiles (user_id, category_id, description, city, is_active, is_verified, rating, total_reviews) VALUES 
 ((SELECT id FROM users WHERE email = 'test@provider.com'), 1, 'Expert plombier professionnel avec 10 ans d''expérience. Intervention rapide à domicile.', 'Casablanca', 1, 1, 4.8, 25);
+
+-- ─── Insert default availability for providers (all days available) ───────────
+INSERT INTO provider_availability (provider_id, day_of_week, is_available)
+SELECT id, day_num, 1
+FROM users, (SELECT 1 as day_num UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7) days
+WHERE role = 'PROVIDER'
+ON DUPLICATE KEY UPDATE is_available = 1;

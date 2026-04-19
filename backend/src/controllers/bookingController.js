@@ -36,15 +36,46 @@ const getAvailableSlots = async (req, res) => {
       return res.status(400).json({ success: false, message: 'provider_id and date are required' });
     }
 
+    const dateParts = String(date).split('-').map(Number);
+    if (dateParts.length !== 3 || dateParts.some(Number.isNaN)) {
+      return res.status(400).json({ success: false, message: 'date must be YYYY-MM-DD' });
+    }
+
+    const meetingDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    const jsDay = meetingDate.getDay(); // 0=Sun ... 6=Sat
+    const dayOfWeek = jsDay === 0 ? 7 : jsDay; // 1=Mon ... 7=Sun
+
+    const [availabilityRows] = await pool.execute(
+      `SELECT is_available
+       FROM provider_availability
+       WHERE provider_id = ? AND day_of_week = ?`,
+      [provider_id, dayOfWeek]
+    );
+
+    if (availabilityRows.length > 0 && Number(availabilityRows[0].is_available) !== 1) {
+      return res.json({
+        success: true,
+        data: {
+          date,
+          available: [],
+          taken: ALL_SLOTS,
+          provider_available: false,
+        },
+      });
+    }
+
     const [takenRows] = await pool.execute(
-      `SELECT time_slot FROM bookings WHERE provider_id = ? AND booking_date = ? AND status != 'CANCELLED'`,
+      `SELECT time_slot FROM bookings WHERE provider_id = ? AND date_meeting = ? AND status != 'CANCELLED'`,
       [provider_id, date]
     );
 
     const takenSlots = takenRows.map((r) => r.time_slot);
     const availableSlots = ALL_SLOTS.filter((slot) => !takenSlots.includes(slot));
 
-    res.json({ success: true, data: { date, available: availableSlots, taken: takenSlots } });
+    res.json({
+      success: true,
+      data: { date, available: availableSlots, taken: takenSlots, provider_available: true },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -53,10 +84,10 @@ const getAvailableSlots = async (req, res) => {
 // ─── POST /api/bookings ───────────────────────────────────────────────────────
 const createBooking = async (req, res) => {
   try {
-    const { provider_id, booking_date, time_slot, agreed_price, notes } = req.body;
+    const { provider_id, date_meeting, time_slot, estimated_price, notes } = req.body;
 
-    if (!provider_id || !booking_date || !time_slot) {
-      return res.status(400).json({ success: false, message: 'provider_id, booking_date, and time_slot are required' });
+    if (!provider_id || !date_meeting || !time_slot) {
+      return res.status(400).json({ success: false, message: 'provider_id, date_meeting, and time_slot are required' });
     }
 
     if (!ALL_SLOTS.includes(time_slot)) {
@@ -72,10 +103,10 @@ const createBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Provider not found or not available' });
     }
 
-    // Save the booking with the price from Step 2
+    // Save the booking
     const [result] = await pool.execute(
-      `INSERT INTO bookings (client_id, provider_id, booking_date, time_slot, estimated_price, agreed_price, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, provider_id, booking_date, time_slot, agreed_price, agreed_price, notes || null]
+      `INSERT INTO bookings (client_id, provider_id, date_meeting, time_slot, estimated_price, notes) VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.user.id, provider_id, date_meeting, time_slot, estimated_price || null, notes || null]
     );
 
     const booking = await getBooking(result.insertId);
@@ -87,7 +118,7 @@ const createBooking = async (req, res) => {
       provider_id,
       'BOOKING_NEW',
       'Nouvelle demande de réservation',
-      `${clientName} a réservé vos services pour ${agreed_price} MAD le ${booking_date} (${time_slot})`,
+      `${clientName} a réservé vos services pour le ${date_meeting} (${time_slot})`,
       { booking_id: booking.id }
     );
 
@@ -131,7 +162,7 @@ const getBookings = async (req, res) => {
 
     if (status) { sql += ' AND b.status = ?'; params.push(status); }
 
-    sql += ' ORDER BY b.booking_date DESC, b.time_slot ASC';
+    sql += ' ORDER BY b.date_meeting DESC, b.time_slot ASC';
 
     const [rows] = await pool.execute(sql, params);
     res.json({ success: true, data: rows });
@@ -191,7 +222,7 @@ const confirmBooking = async (req, res) => {
     const qrCode = crypto.randomBytes(32).toString('hex');
     
     // Set QR activation time based on booking date and time slot
-    const bookingDate = new Date(booking.booking_date);
+    const bookingDate = new Date(booking.date_meeting);
     const timeSlot = booking.time_slot;
     let startHour = 8;
     if (timeSlot === '12:00-15:00') startHour = 12;
@@ -213,7 +244,7 @@ const confirmBooking = async (req, res) => {
       booking.client_id,
       'BOOKING_CONFIRMED',
       'Booking Confirmed',
-      `Your booking on ${booking.booking_date} (${booking.time_slot}) is confirmed. QR code will be active from ${qrActiveFrom.toLocaleTimeString()}.`,
+      `Votre réservation du ${booking.date_meeting} (${booking.time_slot}) est confirmée. Le QR code sera actif à partir de ${qrActiveFrom.toLocaleTimeString()}.`,
       { booking_id: booking.id }
     );
 
@@ -517,7 +548,7 @@ const completeBooking = async (req, res) => {
       booking.client_id,
       'BOOKING_COMPLETED',
       'Service Completed',
-      `Your booking on ${booking.booking_date} (${booking.time_slot}) is completed. Please leave a review.`,
+      `Votre réservation du ${booking.date_meeting} (${booking.time_slot}) est terminée. Laissez un avis !`,
       { booking_id: booking.id }
     );
 
@@ -526,6 +557,96 @@ const completeBooking = async (req, res) => {
 
     res.json({ success: true, message: 'Booking completed' });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── GET /api/bookings/:id/photos ─────────────────────────────────────────────
+const getBookingPhotos = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const booking = await getBooking(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (
+      booking.client_id !== req.user.id &&
+      booking.provider_id !== req.user.id &&
+      req.user.role !== 'ADMIN'
+    ) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT * FROM booking_photos WHERE booking_id = ? ORDER BY type, sort_order',
+      [bookingId]
+    );
+
+    const beforePhotos = rows.filter((p) => p.type === 'BEFORE').map((p) => p.url);
+    const afterPhotos = rows.filter((p) => p.type === 'AFTER').map((p) => p.url);
+
+    return res.json({
+      success: true,
+      data: { before: beforePhotos, after: afterPhotos },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── POST /api/bookings/:id/after-images ─────────────────────────────────────
+const uploadAfterImages = async (req, res) => {
+  try {
+    const { images } = req.body;
+    const bookingId = req.params.id;
+
+    console.log('Received images:', images);
+    console.log('Images count:', images?.length);
+
+    if (!images || images.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one image is required' });
+    }
+
+    const booking = await getBooking(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the provider can upload after images' });
+    }
+
+    if (booking.status !== 'IN_PROGRESS') {
+      return res.status(400).json({ success: false, message: `Cannot upload after images for status: ${booking.status}` });
+    }
+
+    for (let i = 0; i < images.length; i += 1) {
+      await pool.execute(
+        'INSERT INTO booking_photos (booking_id, uploaded_by, type, url, sort_order) VALUES (?, ?, ?, ?, ?)',
+        [bookingId, req.user.id, 'AFTER', images[i], i + 1]
+      );
+    }
+
+    await pool.execute("UPDATE bookings SET status = 'COMPLETED' WHERE id = ?", [bookingId]);
+
+    await createNotification(
+      booking.client_id,
+      'BOOKING_COMPLETED',
+      'Service Completed',
+      'Votre service est terminé. Laissez un avis !',
+      { booking_id: booking.id }
+    );
+
+    try {
+      const io = getIO();
+      io.to(`booking_${booking.id}`).emit('booking:completed', { booking_id: booking.id });
+      io.to(`user_${booking.client_id}`).emit('booking:completed', { booking_id: booking.id });
+    } catch (_) {}
+
+    res.json({ success: true, message: 'Images uploaded and service completed' });
+  } catch (error) {
+    console.error('Upload error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -550,7 +671,7 @@ const cancelBooking = async (req, res) => {
       notifyId,
       'BOOKING_CANCELLED',
       'Booking Cancelled',
-      `Booking on ${booking.booking_date} (${booking.time_slot}) was cancelled`,
+      `La réservation du ${booking.date_meeting} (${booking.time_slot}) a été annulée`,
       { booking_id: booking.id }
     );
 
@@ -596,6 +717,36 @@ const createReview = async (req, res) => {
       [ratingRows[0].avg_rating, ratingRows[0].total, booking.provider_id]
     );
 
+    const safeComment = (comment || '').trim();
+    const shortComment = safeComment ? safeComment.substring(0, 50) : 'Sans commentaire';
+    await createNotification(
+      booking.provider_id,
+      'REVIEW',
+      'Nouvel avis',
+      `${req.user.name} vous a noté ${rating}/5 : "${shortComment}"`,
+      { booking_id: booking.id, rating, comment: safeComment || null }
+    );
+
+    if (rating >= 4) {
+      await pool.execute(
+        'UPDATE users SET token_balance = token_balance + 0.5 WHERE id = ?',
+        [booking.provider_id]
+      );
+
+      await pool.execute(
+        'INSERT INTO token_transactions (user_id, type, amount, description, booking_id) VALUES (?, ?, ?, ?, ?)',
+        [booking.provider_id, 'REWARD', 0.5, `Avis ${rating} étoiles`, booking.id]
+      );
+
+      await createNotification(
+        booking.provider_id,
+        'TOKEN_REWARD',
+        'Token reçu 🪙',
+        `Vous avez reçu +0.5 token pour votre avis ${rating} étoiles !`,
+        { booking_id: booking.id, amount: 0.5 }
+      );
+    }
+
     res.status(201).json({ success: true, message: 'Review submitted' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -618,5 +769,7 @@ module.exports = {
   scanQR,
   cancelBooking,
   completeBooking,
+  getBookingPhotos,
+  uploadAfterImages,
   createReview,
 };

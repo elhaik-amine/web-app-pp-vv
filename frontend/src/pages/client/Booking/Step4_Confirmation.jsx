@@ -6,81 +6,134 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
+const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+// ─── Upload a single local URI to Cloudinary ──────────────────────────────────
+const uploadToCloudinary = async (uri) => {
+  const formData = new FormData();
+  const filename = uri.split('/').pop();
+  const ext = filename.split('.').pop() || 'jpg';
+  formData.append('file', { uri, name: filename, type: `image/${ext}` });
+  formData.append('upload_preset', CLOUDINARY_PRESET);
+
+  const response = await fetch(CLOUDINARY_URL, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await response.json();
+  if (!data.secure_url) throw new Error('Cloudinary upload failed');
+  return data.secure_url;
+};
+
 const BookingStep4Screen = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
-  
-  const { 
-    providerId, 
-    providerName, 
-    description, 
-    photos, 
-    proposedPrice, 
-    bookingDate, 
-    timeSlot 
+  const [phase, setPhase] = useState(''); // 'photos' | 'booking' | 'saving'
+
+  const {
+    providerId,
+    providerName,
+    description,
+    photos,
+    proposedPrice,
+    bookingDate,   // already a local YYYY-MM-DD string from Step3
+    timeSlot,
   } = route.params || {};
-  
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   const handleConfirm = async () => {
     setSubmitting(true);
-    
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
-      
-      const bookingData = {
-        provider_id: providerId,
-        booking_date: bookingDate,
-        time_slot: timeSlot,
-        agreed_price: proposedPrice,
-        notes: description,
-      };
-      
-      const response = await fetch(`${API_URL}/bookings`, {
+
+      // ── Phase 1: Upload photos to Cloudinary ─────────────────────────────
+      setPhase('photos');
+      const uploadedUrls = [];
+      for (let i = 0; i < photos.length; i++) {
+        const url = await uploadToCloudinary(photos[i].uri);
+        uploadedUrls.push(url);
+      }
+
+      // ── Phase 2: Create the booking ──────────────────────────────────────
+      setPhase('booking');
+      const bookingRes = await fetch(`${API_URL}/bookings`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(bookingData),
+        body: JSON.stringify({
+          provider_id:    providerId,
+          date_meeting:   bookingDate,   // ← correct column name
+          time_slot:      timeSlot,
+          estimated_price: Number(proposedPrice),
+          notes:          description,
+        }),
       });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        Alert.alert(
-          'Succès', 
-          'Votre réservation a été envoyée au prestataire!',
-          [
-            { 
-              text: 'OK', 
-              onPress: () => {
-                // Go back to HomeClient and clear the booking stack
-                navigation.popToTop();
-                navigation.navigate('HomeClient');
-              }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Erreur', data.message || 'Erreur lors de la réservation');
+      const bookingData = await bookingRes.json();
+      if (!bookingData.success) {
+        Alert.alert('Erreur', bookingData.message || 'Erreur lors de la réservation');
+        return;
       }
+      const bookingId = bookingData.data?.id || bookingData.id;
+
+      // ── Phase 3: Save client BEFORE photos to booking_photos table ───────
+      setPhase('saving');
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        const photoUrl = uploadedUrls[i] || photo.uri;
+
+        await fetch(`${API_URL}/bookings/${bookingId}/photos`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'BEFORE',
+            url: photoUrl,
+            description: i === 0 ? description : null, // attach description to first photo
+            sort_order: photo.sort_order || i + 1,
+          }),
+        });
+      }
+
+      // ── Done ─────────────────────────────────────────────────────────────
+      Alert.alert(
+        '✅ Réservation envoyée',
+        'Votre demande a été envoyée au prestataire. Il pourra accepter ou négocier le prix.',
+        [{ text: 'OK', onPress: () => { navigation.popToTop(); navigation.navigate('HomeClient'); } }],
+      );
     } catch (error) {
-      console.log('Error creating booking:', error);
-      Alert.alert('Erreur', 'Impossible de créer la réservation');
+      console.log('Booking error:', error);
+      Alert.alert('Erreur', "Une erreur est survenue. Vérifiez votre connexion et réessayez.");
     } finally {
       setSubmitting(false);
+      setPhase('');
     }
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (!dateString) return '';
+    // Parse as local date (avoid UTC midnight shift)
+    const [y, m, d] = dateString.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    });
+  };
+
+  const phaseLabel = () => {
+    if (phase === 'photos')  return `Envoi des photos… (${photos?.length} photo${photos?.length > 1 ? 's' : ''})`;
+    if (phase === 'booking') return 'Création de la réservation…';
+    if (phase === 'saving')  return 'Finalisation…';
+    return '';
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} disabled={submitting}>
           <Ionicons name="arrow-back" size={24} color="#191C23" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nouvelle Réservation</Text>
@@ -97,6 +150,7 @@ const BookingStep4Screen = ({ navigation, route }) => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Récapitulatif de votre demande</Text>
 
+        {/* Provider card */}
         <View style={styles.summaryCard}>
           <View style={styles.providerRow}>
             <View style={styles.avatarPlaceholder}>
@@ -112,20 +166,12 @@ const BookingStep4Screen = ({ navigation, route }) => {
 
           <View style={styles.detailRow}>
             <View style={styles.iconLabelGroup}>
-              <MaterialCommunityIcons name="tools" size={20} color="#1A73E8" />
-              <Text style={styles.detailLabel}>Service</Text>
-            </View>
-            <Text style={styles.detailValue}>Service à domicile</Text>
-          </View>
-          
-          <View style={styles.detailRow}>
-            <View style={styles.iconLabelGroup}>
               <Ionicons name="calendar-outline" size={20} color="#1A73E8" />
               <Text style={styles.detailLabel}>Date</Text>
             </View>
             <Text style={styles.detailValue}>{formatDate(bookingDate)}</Text>
           </View>
-          
+
           <View style={styles.detailRow}>
             <View style={styles.iconLabelGroup}>
               <Ionicons name="time-outline" size={20} color="#1A73E8" />
@@ -133,7 +179,7 @@ const BookingStep4Screen = ({ navigation, route }) => {
             </View>
             <Text style={styles.detailValue}>{timeSlot}</Text>
           </View>
-          
+
           <View style={styles.detailRow}>
             <View style={styles.iconLabelGroup}>
               <Ionicons name="pricetag-outline" size={20} color="#1A73E8" />
@@ -141,37 +187,58 @@ const BookingStep4Screen = ({ navigation, route }) => {
             </View>
             <Text style={styles.priceValue}>{proposedPrice} MAD</Text>
           </View>
-          
+
           {description && (
             <View style={[styles.detailRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
               <View style={styles.iconLabelGroup}>
                 <Ionicons name="document-text-outline" size={20} color="#1A73E8" />
                 <Text style={styles.detailLabel}>Description</Text>
               </View>
-              <Text style={styles.descriptionValue}>{description.substring(0, 50)}...</Text>
+              <Text style={styles.descriptionValue} numberOfLines={2}>{description}</Text>
             </View>
           )}
         </View>
 
+        {/* Photos preview */}
+        {photos?.length > 0 && (
+          <View style={styles.photosSection}>
+            <Text style={styles.photosSectionTitle}>
+              <Ionicons name="images-outline" size={16} color="#1A73E8" /> Photos jointes ({photos.length})
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+              {photos.map((photo, i) => (
+                <Image key={i} source={{ uri: photo.uri }} style={styles.photoThumb} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         <View style={styles.infoBox}>
-          <Ionicons name="clipboard-outline" size={20} color="#1A73E8" style={styles.infoIcon} />
-          <Text style={styles.infoText}>Votre demande sera envoyée au prestataire. Il pourra accepter ou négocier le prix.</Text>
+          <Ionicons name="information-circle-outline" size={20} color="#1A73E8" style={styles.infoIcon} />
+          <Text style={styles.infoText}>
+            Votre demande sera envoyée au prestataire. Il pourra accepter ou négocier le prix.
+          </Text>
         </View>
-        
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={[styles.confirmButton, submitting && styles.confirmButtonDisabled]} 
+        {submitting && phase ? (
+          <View style={styles.phaseContainer}>
+            <ActivityIndicator color="#1A73E8" style={{ marginRight: 10 }} />
+            <Text style={styles.phaseText}>{phaseLabel()}</Text>
+          </View>
+        ) : null}
+        <TouchableOpacity
+          style={[styles.confirmButton, submitting && styles.confirmButtonDisabled]}
           onPress={handleConfirm}
           disabled={submitting}
         >
-          {submitting ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.confirmButtonText}>Confirmer la réservation ✓</Text>
-          )}
+          {submitting
+            ? <ActivityIndicator color="#FFFFFF" />
+            : <Text style={styles.confirmButtonText}>Confirmer la réservation ✓</Text>
+          }
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -190,7 +257,7 @@ const styles = StyleSheet.create({
   progressText: { fontSize: 12, color: '#1A73E8', fontWeight: '700' },
   scrollContent: { paddingHorizontal: 24 },
   sectionTitle: { fontSize: 20, fontWeight: '800', color: '#191C23', marginBottom: 20 },
-  summaryCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', elevation: 2, marginBottom: 24 },
+  summaryCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', elevation: 2, marginBottom: 20 },
   providerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   avatarPlaceholder: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#F0F7FF', alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { fontSize: 24, fontWeight: '700', color: '#1A73E8' },
@@ -201,14 +268,20 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
   iconLabelGroup: { flexDirection: 'row', alignItems: 'center' },
   detailLabel: { fontSize: 14, color: '#64748B', marginLeft: 12 },
-  detailValue: { fontSize: 14, fontWeight: '600', color: '#191C23', textAlign: 'right', maxWidth: '50%' },
-  descriptionValue: { fontSize: 14, color: '#64748B', textAlign: 'right', maxWidth: '50%' },
+  detailValue: { fontSize: 14, fontWeight: '600', color: '#191C23', textAlign: 'right', maxWidth: '55%' },
+  descriptionValue: { fontSize: 13, color: '#64748B', textAlign: 'right', maxWidth: '55%' },
   priceValue: { fontSize: 18, fontWeight: '800', color: '#1A73E8' },
-  infoBox: { flexDirection: 'row', backgroundColor: '#F0F7FF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#D0E4FF' },
+  photosSection: { marginBottom: 20 },
+  photosSectionTitle: { fontSize: 14, fontWeight: '700', color: '#191C23', marginBottom: 12 },
+  photosScroll: { flexDirection: 'row' },
+  photoThumb: { width: 72, height: 72, borderRadius: 12, marginRight: 10, backgroundColor: '#F1F5F9' },
+  infoBox: { flexDirection: 'row', backgroundColor: '#F0F7FF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#D0E4FF', marginBottom: 8 },
   infoIcon: { marginTop: 2 },
   infoText: { flex: 1, marginLeft: 12, fontSize: 14, color: '#1A73E8', lineHeight: 20 },
-  bottomSpacer: { height: 120 },
-  footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 24, paddingBottom: 34, paddingTop: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  bottomSpacer: { height: 130 },
+  footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 34 : 24, paddingTop: 12, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  phaseContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  phaseText: { fontSize: 13, color: '#1A73E8', fontWeight: '600' },
   confirmButton: { backgroundColor: '#10B981', height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center', elevation: 8 },
   confirmButtonDisabled: { opacity: 0.7 },
   confirmButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },

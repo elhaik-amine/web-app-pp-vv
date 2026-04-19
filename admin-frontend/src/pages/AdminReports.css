@@ -1,0 +1,146 @@
+.reports-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.reports-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 32px;
+}
+
+.filter-tabs {
+  display: flex;
+  padding: 4px;
+  gap: 4px;
+}
+
+.filter-tab {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.filter-tab:hover {
+  color: var(--text-main);
+  background: var(--background);
+}
+
+.filter-tab.active {
+  background: var(--primary);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.report-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.report-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.reporter-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reporter-info .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background-color: var(--background);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.reporter-info h4 {
+  font-size: 1rem;
+  margin-bottom: 2px;
+}
+
+.reporter-info span {
+  color: var(--text-light);
+  font-size: 0.8rem;
+}
+
+.report-card-body {
+  flex: 1;
+  margin-bottom: 16px;
+}
+
+.reported-user {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.report-description {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.report-status {
+  display: flex;
+}
+
+.report-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+
+.text-danger {
+  color: var(--danger);
+  border-color: var(--danger-light);
+}
+
+.text-danger:hover {
+  background-color: var(--danger-light);
+  color: var(--danger);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.empty-state h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  color: var(--text-muted);
+}

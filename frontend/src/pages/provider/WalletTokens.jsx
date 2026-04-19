@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StripeProvider, useStripe } from '@stripe/stripe-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +33,9 @@ const TokenWalletScreen = ({ navigation }) => {
   const [selectedPackage, setSelectedPackage] = useState(null);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   useEffect(() => {
     fetchBalance();
@@ -113,44 +117,86 @@ const TokenWalletScreen = ({ navigation }) => {
       return;
     }
 
-    Alert.alert(
-      'Confirmation',
-      `Acheter ${selectedPackage.amount} tokens pour ${selectedPackage.price} MAD ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Acheter',
-          onPress: async () => {
-            setPurchasing(true);
-            try {
-              const token = await AsyncStorage.getItem('khidmati_token');
-              const response = await fetch(`${API_URL}/tokens/buy`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ amount: selectedPackage.amount }),
-              });
-              const data = await response.json();
-              if (data.success) {
-                Alert.alert('Succès', `${selectedPackage.amount} tokens achetés !`);
-                setSelectedPackage(null);
-                fetchBalance();
-                fetchHistory();
-              } else {
-                Alert.alert('Erreur', data.message);
-              }
-            } catch (error) {
-              console.log('Error purchasing tokens:', error);
-              Alert.alert('Erreur', 'Impossible d\'acheter des tokens');
-            } finally {
-              setPurchasing(false);
-            }
+    setPurchasing(true);
+    
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      
+      // Step 1: Create PaymentIntent on backend
+      const response = await fetch(`${API_URL}/tokens/buy`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ amount: selectedPackage.amount }),
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        Alert.alert('Erreur', data.message || 'Impossible de créer le paiement');
+        setPurchasing(false);
+        return;
+      }
+
+      const { client_secret } = data.data;
+
+      // Step 2: Initialize Stripe Payment Sheet
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: client_secret,
+        merchantDisplayName: 'Khidmati',
+        returnURL: 'khidmati://payment-complete',
+        appearance: {
+          colors: {
+            primary: '#1A73E8',
           },
         },
-      ]
-    );
+      });
+
+      if (initError) {
+        console.error('Payment sheet init error:', initError);
+        Alert.alert('Erreur', 'Impossible d\'initialiser le paiement');
+        setPurchasing(false);
+        return;
+      }
+
+      // Step 3: Present Payment Sheet to user
+      const { error: presentError } = await presentPaymentSheet();
+
+      if (presentError) {
+        // User cancelled or payment failed
+        if (presentError.code === 'Canceled') {
+          Alert.alert('Annulé', 'Paiement annulé');
+        } else {
+          Alert.alert('Échec du paiement', presentError.message || 'Le paiement a échoué');
+        }
+        setPurchasing(false);
+        return;
+      }
+
+      // Step 4: Payment successful
+      Alert.alert(
+        'Succès ! 🎉',
+        `${selectedPackage.amount} tokens achetés avec succès !`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setSelectedPackage(null);
+              fetchBalance();
+              fetchHistory();
+            },
+          },
+        ]
+      );
+      
+    } catch (error) {
+      console.error('Error purchasing tokens:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors du paiement');
+    } finally {
+      setPurchasing(false);
+    }
   };
 
   const renderPackage = ({ item }) => (
@@ -325,4 +371,15 @@ const styles = StyleSheet.create({
   bottomSpacer: { height: 40 },
 });
 
-export default TokenWalletScreen;
+// Wrap with StripeProvider
+const TokenWalletScreenWithStripe = (props) => {
+  const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  
+  return (
+    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+      <TokenWalletScreen {...props} />
+    </StripeProvider>
+  );
+};
+
+export default TokenWalletScreenWithStripe;
