@@ -36,15 +36,10 @@ import WalletTokensScreen from './src/pages/provider/WalletTokens';
 // Shared
 import NotificationsScreen from './src/pages/shared/Notifications';
 
-// Admin
-import AdminDashboardScreen from './src/pages/admin/AdminDashboard';
-import AdminReportsScreen from './src/pages/admin/AdminReports';
-
 const RootStack = createStackNavigator();
 const AuthStack = createStackNavigator();
 const ClientStack = createStackNavigator();
 const ProviderStack = createStackNavigator();
-const AdminStack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 const TAB_ICON_MAP = {
@@ -144,18 +139,6 @@ function ProviderNavigator() {
   );
 }
 
-function AdminNavigator() {
-  return (
-    <AdminStack.Navigator screenOptions={{ headerShown: false }}>
-      <AdminStack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-      <AdminStack.Screen name="AdminReports" component={AdminReportsScreen} />
-      <AdminStack.Screen name="BookingDetail" component={BookingDetailScreen} />
-      <AdminStack.Screen name="MesReservations" component={MesReservationsScreen} />
-      <AdminStack.Screen name="Profil" component={ProfilScreen} />
-    </AdminStack.Navigator>
-  );
-}
-
 function AppNavigator() {
   const { userRole, isLoading } = useContext(AuthContext);
 
@@ -171,16 +154,13 @@ function AppNavigator() {
     ? 'ClientApp'
     : userRole === 'PROVIDER'
       ? 'ProviderApp'
-      : userRole === 'ADMIN'
-        ? 'AdminApp'
-        : 'Auth';
+      : 'Auth';
 
   return (
     <RootStack.Navigator key={userRole || 'guest'} initialRouteName={initialRouteName} screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="Auth" component={AuthNavigator} />
       <RootStack.Screen name="ClientApp" component={ClientNavigator} />
       <RootStack.Screen name="ProviderApp" component={ProviderNavigator} />
-      <RootStack.Screen name="AdminApp" component={AdminNavigator} />
       <RootStack.Screen name="Login" component={LoginScreen} />
       <RootStack.Screen name="Register" component={RegisterScreen} />
       <RootStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />

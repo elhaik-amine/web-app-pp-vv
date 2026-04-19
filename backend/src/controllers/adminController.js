@@ -1,4 +1,9 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { pool } = require('../config/db');
+
+const generateAccessToken = (id) =>
+  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 // GET /api/admin/dashboard
 const getDashboard = async (req, res) => {
@@ -22,6 +27,39 @@ const getDashboard = async (req, res) => {
       success: true,
       data: { total_users, total_bookings, total_providers, pending_reports: total_reports, total_tokens_purchased: total_tokens, recent_bookings: recentBookings },
       message: 'OK',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// POST /api/admin/login
+const loginAdmin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    }
+
+    const [rows] = await pool.execute('SELECT * FROM users WHERE email = ? AND role = ?', [email, 'ADMIN']);
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid admin credentials' });
+    }
+
+    const user = rows[0];
+    const match = await bcrypt.compare(password, user.password);
+    
+    if (!match) {
+      return res.status(400).json({ success: false, message: 'Invalid admin credentials' });
+    }
+
+    const token = generateAccessToken(user.id);
+
+    res.json({
+      success: true,
+      data: { role: user.role, token },
+      message: 'Admin login successful',
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -214,4 +252,5 @@ module.exports = {
   getBookings,
   completeBooking,
   getTokenStats,
+  loginAdmin,
 };
