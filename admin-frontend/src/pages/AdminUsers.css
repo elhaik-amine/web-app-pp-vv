@@ -1,0 +1,154 @@
+.users-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.users-header {
+  margin-bottom: 24px;
+}
+
+.users-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 24px;
+  margin-bottom: 32px;
+  border-radius: 16px;
+}
+
+@media (min-width: 768px) {
+  .users-controls {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+.search-bar {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-light);
+}
+
+.search-bar .input-field {
+  padding-left: 44px;
+  width: 100%;
+  margin: 0;
+  border-radius: 12px;
+}
+
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.user-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.user-card-header {
+  margin-bottom: 16px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-info .avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background-color: var(--primary-light);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.user-info h4 {
+  font-size: 1.1rem;
+  margin-bottom: 2px;
+  color: var(--text-main);
+}
+
+.user-email {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.user-card-body {
+  flex: 1;
+  margin-bottom: 20px;
+}
+
+.user-badges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.user-date, .user-tokens {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.user-tokens strong {
+  color: var(--text-main);
+}
+
+.user-card-footer {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+
+.user-card-footer .btn {
+  flex: 1;
+  padding: 8px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  background: transparent;
+}
+
+.user-card-footer .text-warning {
+  color: var(--warning);
+  border-color: var(--warning-light);
+}
+
+.user-card-footer .text-warning:hover:not(:disabled) {
+  background-color: var(--warning-light);
+  border-color: var(--warning);
+}
+
+.user-card-footer .text-danger {
+  color: var(--danger);
+  border-color: var(--danger-light);
+}
+
+.user-card-footer .text-danger:hover {
+  background-color: var(--danger-light);
+  border-color: var(--danger);
+}
+
+.user-card-footer .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

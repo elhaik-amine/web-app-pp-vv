@@ -15,13 +15,16 @@ const ProviderListScreen = ({ navigation, route }) => {
   const [activeFilter, setActiveFilter] = useState('Tous');
   
   const { categoryId, categoryName, search, city } = route.params || {};
+  const [selectedCity, setSelectedCity] = useState(city || 'Toutes les villes');
+  
+  const moroccanCities = ['Toutes les villes', 'Casablanca', 'Rabat', 'Marrakech', 'Tanger', 'Agadir', 'Fès', 'Meknès', 'Oujda'];
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   const filters = ['Tous', 'Mieux notés'];
 
   useEffect(() => {
     fetchProviders();
-  }, []);
+  }, [selectedCity]);
 
   const fetchProviders = async () => {
     setLoading(true);
@@ -37,7 +40,7 @@ const ProviderListScreen = ({ navigation, route }) => {
       
       const params = [];
       if (categoryId) params.push(`category_id=${categoryId}`);
-      if (city) params.push(`city=${encodeURIComponent(city)}`);
+      if (selectedCity && selectedCity !== 'Toutes les villes') params.push(`city=${encodeURIComponent(selectedCity)}`);
       if (search) params.push(`search=${encodeURIComponent(search)}`);
       
       if (params.length > 0) {
@@ -161,10 +164,8 @@ const ProviderListScreen = ({ navigation, route }) => {
         ) : (
           <View style={styles.placeholder} />
         )}
-        <Text style={styles.headerTitle}>{categoryName || 'Prestataires'}</Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="options-outline" size={24} color="#191C23" />
-        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center' }]}>{categoryName || 'Prestataires'}</Text>
+        <View style={styles.placeholder} />
       </View>
 
       <View style={styles.filtersContainer}>
@@ -175,6 +176,24 @@ const ProviderListScreen = ({ navigation, route }) => {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filtersList}
+        />
+      </View>
+
+      <View style={styles.cityFiltersContainer}>
+        <FlatList
+          data={moroccanCities}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.cityChip, selectedCity === item && styles.cityChipActive]}
+              onPress={() => setSelectedCity(item)}
+            >
+              <Text style={[styles.cityText, selectedCity === item && styles.cityTextActive]}>{item}</Text>
+            </TouchableOpacity>
+          )}
+          keyExtractor={(item) => item}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.cityFiltersList}
         />
       </View>
 
@@ -220,6 +239,12 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: '#1A73E8', borderColor: '#1A73E8' },
   filterText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   filterTextActive: { color: '#FFFFFF' },
+  cityFiltersContainer: { marginBottom: 16 },
+  cityFiltersList: { paddingHorizontal: 24, paddingBottom: 8 },
+  cityChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', marginRight: 8 },
+  cityChipActive: { backgroundColor: '#E0E7FF' },
+  cityText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  cityTextActive: { color: '#4338CA' },
   listContent: { paddingHorizontal: 24, paddingBottom: 40 },
   providerCard: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16, overflow: 'hidden', elevation: 2 },
   providerImage: { width: '100%', height: 160, backgroundColor: '#F1F5F9' },

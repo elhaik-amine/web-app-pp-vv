@@ -35,10 +35,13 @@ const Sidebar = () => {
           <FiAlertCircle size={20} />
           <span>Reports</span>
         </NavLink>
-        <div className="nav-item disabled">
+        <NavLink 
+          to="/users" 
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
           <FiUsers size={20} />
-          <span>Users (Coming Soon)</span>
-        </div>
+          <span>Users</span>
+        </NavLink>
       </nav>
 
       <div className="sidebar-footer">

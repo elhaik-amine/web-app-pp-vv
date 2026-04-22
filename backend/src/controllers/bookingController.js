@@ -4,6 +4,7 @@ const { getIO } = require('../socket');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const ALL_SLOTS = ['08:00-12:00', '12:00-15:00', '15:00-18:00', '18:00-21:00'];
+const TOKEN_COST_PER_BOOKING = 1;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const createNotification = async (userId, type, title, message, data = null) => {
@@ -95,13 +96,15 @@ const createBooking = async (req, res) => {
     }
 
     const [providers] = await pool.execute(
-      `SELECT u.id, u.name FROM users u JOIN provider_profiles pp ON pp.user_id = u.id WHERE u.id = ? AND u.status = 'ACTIVE' AND pp.is_active = 1`,
+      `SELECT u.id, u.name, u.token_balance FROM users u JOIN provider_profiles pp ON pp.user_id = u.id WHERE u.id = ? AND u.status = 'ACTIVE' AND pp.is_active = 1`,
       [provider_id]
     );
 
     if (providers.length === 0) {
       return res.status(404).json({ success: false, message: 'Provider not found or not available' });
     }
+
+    // Token balance check removed so clients can still request, and providers are reminded to buy tokens when accepting
 
     // Save the booking
     const [result] = await pool.execute(
@@ -148,8 +151,8 @@ const getBookings = async (req, res) => {
 
     let sql = `
       SELECT b.*,
-             c.name AS client_name, c.phone AS client_phone,
-             p.name AS provider_name, p.phone AS provider_phone,
+             c.name AS client_name, c.phone AS client_phone, c.avatar AS client_avatar,
+             p.name AS provider_name, p.phone AS provider_phone, p.avatar AS provider_avatar,
              sc.name AS category_name
       FROM bookings b
       JOIN users c ON c.id = b.client_id
@@ -176,8 +179,8 @@ const getBookingById = async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT b.*,
-              c.name AS client_name, c.phone AS client_phone,
-              p.name AS provider_name, p.phone AS provider_phone,
+              c.name AS client_name, c.phone AS client_phone, c.avatar AS client_avatar,
+              p.name AS provider_name, p.phone AS provider_phone, p.avatar AS provider_avatar,
               sc.name AS category_name
        FROM bookings b
        JOIN users c ON c.id = b.client_id
@@ -217,6 +220,12 @@ const confirmBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cannot confirm a booking with status: ${booking.status}` });
     }
 
+    // Check provider token balance
+    const [providerRows] = await pool.execute('SELECT token_balance FROM users WHERE id = ?', [booking.provider_id]);
+    if (Number(providerRows[0].token_balance) < TOKEN_COST_PER_BOOKING) {
+      return res.status(400).json({ success: false, message: 'Solde de tokens insuffisant pour confirmer cette réservation' });
+    }
+
     // Generate QR code
     const crypto = require('crypto');
     const qrCode = crypto.randomBytes(32).toString('hex');
@@ -238,6 +247,13 @@ const confirmBooking = async (req, res) => {
     await pool.execute(
       "UPDATE bookings SET status = 'CONFIRMED', qr_code = ?, qr_active_from = ?, qr_active_until = ? WHERE id = ?",
       [qrCode, qrActiveFrom, qrActiveUntil, booking.id]
+    );
+
+    // Deduct token from provider
+    await pool.execute('UPDATE users SET token_balance = token_balance - ? WHERE id = ?', [TOKEN_COST_PER_BOOKING, booking.provider_id]);
+    await pool.execute(
+      'INSERT INTO token_transactions (user_id, type, amount, description, booking_id) VALUES (?, ?, ?, ?, ?)',
+      [booking.provider_id, 'DEDUCTION', -TOKEN_COST_PER_BOOKING, 'Réservation confirmée', booking.id]
     );
 
     await createNotification(
@@ -276,6 +292,13 @@ const acceptPrice = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
+    if (req.user.id === booking.provider_id) {
+      const [providerRows] = await pool.execute('SELECT token_balance FROM users WHERE id = ?', [booking.provider_id]);
+      if (Number(providerRows[0].token_balance) < TOKEN_COST_PER_BOOKING) {
+        return res.status(400).json({ success: false, message: "Vous n'avez pas assez de tokens pour accepter un prix." });
+      }
+    }
+
     const [existing] = await pool.execute(
       'SELECT * FROM price_acceptances WHERE booking_id = ? AND user_id = ?',
       [bookingId, req.user.id]
@@ -299,11 +322,41 @@ const acceptPrice = async (req, res) => {
     const otherUserId = booking.client_id === req.user.id ? booking.provider_id : booking.client_id;
 
     if (bothAccepted) {
+      // Check provider token balance
+      const [providerRows] = await pool.execute('SELECT token_balance FROM users WHERE id = ?', [booking.provider_id]);
+      if (Number(providerRows[0].token_balance) < TOKEN_COST_PER_BOOKING) {
+        return res.status(400).json({ success: false, message: 'Le prestataire n\'a pas assez de tokens pour finaliser cette réservation' });
+      }
+
+      // Generate QR code upon confirmation
+      const crypto = require('crypto');
+      const qrCode = crypto.randomBytes(32).toString('hex');
+      
+      const bookingDate = new Date(booking.date_meeting);
+      const timeSlot = booking.time_slot;
+      let startHour = 8;
+      if (timeSlot === '12:00-15:00') startHour = 12;
+      else if (timeSlot === '15:00-18:00') startHour = 15;
+      else if (timeSlot === '18:00-21:00') startHour = 18;
+      
+      const qrActiveFrom = new Date(bookingDate);
+      qrActiveFrom.setHours(startHour, 0, 0, 0);
+      
+      const qrActiveUntil = new Date(bookingDate);
+      qrActiveUntil.setHours(startHour + 3, 0, 0, 0);
+
       await pool.execute(
-        "UPDATE bookings SET status = 'CONFIRMED', agreed_price = ?, estimated_price = ? WHERE id = ?",
-        [price, price, bookingId]
+        "UPDATE bookings SET status = 'CONFIRMED', agreed_price = ?, estimated_price = ?, qr_code = ?, qr_active_from = ?, qr_active_until = ? WHERE id = ?",
+        [price, price, qrCode, qrActiveFrom, qrActiveUntil, bookingId]
       );
       
+      // Deduct token from provider
+      await pool.execute('UPDATE users SET token_balance = token_balance - ? WHERE id = ?', [TOKEN_COST_PER_BOOKING, booking.provider_id]);
+      await pool.execute(
+        'INSERT INTO token_transactions (user_id, type, amount, description, booking_id) VALUES (?, ?, ?, ?, ?)',
+        [booking.provider_id, 'DEDUCTION', -TOKEN_COST_PER_BOOKING, 'Réservation confirmée après négociation', bookingId]
+      );
+
       await pool.execute('DELETE FROM price_acceptances WHERE booking_id = ?', [bookingId]);
 
       await createNotification(
@@ -664,7 +717,18 @@ const cancelBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cannot cancel a booking with status: ${booking.status}` });
     }
 
+    const wasConfirmed = booking.status === 'CONFIRMED';
+
     await pool.execute("UPDATE bookings SET status = 'CANCELLED' WHERE id = ?", [booking.id]);
+
+    if (wasConfirmed) {
+      // Refund token
+      await pool.execute('UPDATE users SET token_balance = token_balance + ? WHERE id = ?', [TOKEN_COST_PER_BOOKING, booking.provider_id]);
+      await pool.execute(
+        'INSERT INTO token_transactions (user_id, type, amount, description, booking_id) VALUES (?, ?, ?, ?, ?)',
+        [booking.provider_id, 'REWARD', TOKEN_COST_PER_BOOKING, 'Réservation annulée (remboursement)', booking.id]
+      );
+    }
 
     const notifyId = req.user.id === booking.client_id ? booking.provider_id : booking.client_id;
     await createNotification(

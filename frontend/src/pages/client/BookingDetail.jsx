@@ -12,9 +12,10 @@ const BookingDetailScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [userRole, setUserRole] = useState('');
+  const [tokenBalance, setTokenBalance] = useState(0);
   
   const { bookingId } = route.params || {};
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     loadUserRole();
@@ -40,9 +41,27 @@ const BookingDetailScreen = ({ navigation, route }) => {
       if (userData) {
         const user = JSON.parse(userData);
         setUserRole(user.role);
+        if (user.role === 'PROVIDER') {
+          fetchTokenBalance();
+        }
       }
     } catch (error) {
       console.log('Error loading user role:', error);
+    }
+  };
+
+  const fetchTokenBalance = async () => {
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+      const response = await fetch(`${API_URL}/tokens/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTokenBalance(data.data.balance);
+      }
+    } catch (error) {
+      console.log('Error fetching token balance:', error);
     }
   };
 
@@ -240,7 +259,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
         <View style={styles.summaryCard}>
           <View style={styles.providerRow}>
             <Image 
-              source={{ uri: userRole === 'PROVIDER' ? (booking.client_avatar || 'https://randomuser.me/api/portraits/lego/1.jpg') : (booking.provider_avatar || 'https://randomuser.me/api/portraits/men/32.jpg') }} 
+              source={{ uri: userRole === 'PROVIDER' ? (booking.client_avatar || 'https://i.sstatic.net/l60Hf.png') : (booking.provider_avatar || 'https://randomuser.me/api/portraits/men/32.jpg') }} 
               style={styles.providerAvatar} 
             />
             <View style={styles.providerInfo}>
@@ -277,7 +296,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
               <Ionicons name="calendar-outline" size={20} color="#1A73E8" />
               <View style={styles.detailTextContainer}>
                 <Text style={styles.detailLabel}>Date</Text>
-                <Text style={styles.detailValue}>{formatDate(booking.booking_date)}</Text>
+                <Text style={styles.detailValue}>{formatDate(booking.date_meeting)}</Text>
               </View>
             </View>
             <View style={styles.detailItem}>
@@ -332,7 +351,13 @@ const BookingDetailScreen = ({ navigation, route }) => {
         {isPending && (
           <TouchableOpacity 
             style={styles.negotiateButton}
-            onPress={() => navigation.navigate('Negociation', { bookingId: booking.id })}
+            onPress={() => {
+              if (userRole === 'PROVIDER' && tokenBalance < 1) {
+                Alert.alert('Solde insuffisant', "Vous n'avez pas assez de tokens pour négocier. Veuillez recharger votre compte.");
+              } else {
+                navigation.navigate('Negociation', { bookingId: booking.id });
+              }
+            }}
           >
             <Ionicons name="chatbubbles-outline" size={20} color="#FFFFFF" />
             <Text style={styles.negotiateButtonText}>Négocier le prix</Text>

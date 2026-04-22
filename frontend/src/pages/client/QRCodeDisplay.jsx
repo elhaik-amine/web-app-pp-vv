@@ -15,7 +15,7 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
   const [qrActive, setQrActive] = useState(false);
   
   const { bookingId } = route.params || {};
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     if (bookingId) {
@@ -162,7 +162,7 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
           <View style={styles.detailsRow}>
             <View style={styles.detailItem}>
               <Ionicons name="calendar-outline" size={16} color="#64748B" />
-              <Text style={styles.detailText}>{formatDate(booking.booking_date)}</Text>
+              <Text style={styles.detailText}>{formatDate(booking.date_meeting)}</Text>
             </View>
             <View style={styles.detailItem}>
               <Ionicons name="time-outline" size={16} color="#64748B" />

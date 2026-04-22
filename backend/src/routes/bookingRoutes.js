@@ -143,6 +143,13 @@ router.post('/:id/offer', protect, restricted, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
+    if (req.user.id === booking.provider_id) {
+      const [providerRows] = await pool.execute('SELECT token_balance FROM users WHERE id = ?', [booking.provider_id]);
+      if (Number(providerRows[0].token_balance) < 1) {
+        return res.status(400).json({ success: false, message: "Vous n'avez pas assez de tokens pour envoyer une offre." });
+      }
+    }
+
     if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
       return res.status(400).json({ success: false, message: 'Cannot negotiate on this booking' });
     }

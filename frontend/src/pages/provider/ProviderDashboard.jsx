@@ -34,7 +34,7 @@ const ProviderDashboard = ({ navigation }) => {
   });
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
-  const SOCKET_URL = 'http://192.168.1.10:5000';
+  const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL.replace('/api', '');
 
   useEffect(() => {
     loadProviderData();
@@ -155,6 +155,10 @@ const ProviderDashboard = ({ navigation }) => {
   };
 
   const acceptBooking = async (bookingId) => {
+    if (tokenBalance < 1) {
+      Alert.alert('Solde insuffisant', "Vous n'avez pas assez de tokens pour accepter une réservation. Veuillez recharger votre compte.");
+      return;
+    }
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
       const response = await fetch(`${API_URL}/bookings/${bookingId}/confirm`, {
@@ -222,7 +226,7 @@ const ProviderDashboard = ({ navigation }) => {
           <View style={styles.dateTimeItem}>
             <Ionicons name="calendar-outline" size={16} color="#64748B" />
             <Text style={styles.dateTimeText}>
-              {new Date(item.booking_date).toLocaleDateString()}
+              {new Date(item.date_meeting).toLocaleDateString()}
             </Text>
           </View>
           <View style={styles.dateTimeItem}>
@@ -235,7 +239,13 @@ const ProviderDashboard = ({ navigation }) => {
           <View style={styles.requestActions}>
             <TouchableOpacity 
               style={[styles.actionBtn, styles.negotiateBtn]}
-              onPress={() => navigation.navigate('Negociation', { bookingId: item.id })}
+              onPress={() => {
+                if (tokenBalance < 1) {
+                  Alert.alert('Solde insuffisant', "Vous n'avez pas assez de tokens pour négocier. Veuillez recharger votre compte.");
+                } else {
+                  navigation.navigate('Negociation', { bookingId: item.id });
+                }
+              }}
             >
               <Text style={styles.negotiateText}>Négocier</Text>
             </TouchableOpacity>
