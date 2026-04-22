@@ -31,7 +31,7 @@ const QRScannerScreen = ({ navigation, route }) => {
   const [manualCode, setManualCode] = useState('');
   
   const { bookingId } = route.params || {};
-  const API_URL = 'http://192.168.1.10:5000/api';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     if (bookingId) {
@@ -115,59 +115,24 @@ const QRScannerScreen = ({ navigation, route }) => {
         );
       } else {
         Alert.alert('❌ Erreur', result.message || 'QR code invalide');
+        setScanned(false);
       }
     } catch (error) {
       console.log('Error:', error);
       Alert.alert('Erreur', 'Impossible de vérifier le code');
+      setScanned(false);
     } finally {
       setVerifying(false);
     }
   };
 
-  const handleBarCodeScanned = async ({ type, data }) => {
+  const handleBarCodeScanned = ({ type, data }) => {
     if (scanned || verifying) return;
     
     setScanned(true);
-    setVerifying(true);
-    
     console.log('QR Scanned:', data);
     
-    try {
-      const token = await AsyncStorage.getItem('khidmati_token');
-      
-      const response = await fetch(`${API_URL}/bookings/${booking?.id}/scan-qr`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ qr_code: data }),
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        Alert.alert(
-          '✅ Succès',
-          'QR code validé ! Service démarré.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.replace('BookingDetail', { bookingId: booking?.id }),
-            },
-          ]
-        );
-      } else {
-        Alert.alert('❌ Erreur', result.message || 'QR code invalide');
-        setScanned(false);
-      }
-    } catch (error) {
-      console.log('Error:', error);
-      Alert.alert('Erreur', 'Impossible de vérifier le QR code');
-      setScanned(false);
-    } finally {
-      setVerifying(false);
-    }
+    verifyQRCode(data);
   };
 
   const formatDate = (dateString) => {
@@ -249,9 +214,10 @@ const QRScannerScreen = ({ navigation, route }) => {
       
       <CameraView
         style={StyleSheet.absoluteFillObject}
+        facing="back"
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
+          barcodeTypes: ['qr', 'org.iso.QRCode'],
         }}
       />
       
@@ -291,7 +257,7 @@ const QRScannerScreen = ({ navigation, route }) => {
           <View style={styles.clientInfo}>
             <Text style={styles.clientName}>{booking.client_name || 'Client'}</Text>
             <Text style={styles.missionDetails}>
-              {booking.category_name || 'Service'} — {formatDate(booking.booking_date)} • {booking.time_slot || 'Flexible'}
+              {booking.category_name || 'Service'} — {formatDate(booking.date_meeting)} • {booking.time_slot || 'Flexible'}
             </Text>
           </View>
           <Text style={styles.priceText}>{booking.agreed_price || booking.estimated_price || 0} MAD</Text>
@@ -317,13 +283,19 @@ const QRScannerScreen = ({ navigation, route }) => {
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => {
+          setModalVisible(false);
+          setScanned(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Entrer le code QR</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity onPress={() => {
+                setModalVisible(false);
+                setScanned(false);
+              }}>
                 <Ionicons name="close" size={24} color="#191C23" />
               </TouchableOpacity>
             </View>

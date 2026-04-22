@@ -217,7 +217,7 @@ const MesReservationsScreen = ({ navigation }) => {
         <View style={styles.dateTimeRow}>
           <View style={styles.infoItem}>
             <Ionicons name="calendar-outline" size={16} color="#64748B" />
-            <Text style={styles.infoText}>{formatDate(item.booking_date)}</Text>
+            <Text style={styles.infoText}>{formatDate(item.date_meeting)}</Text>
           </View>
           <View style={styles.infoItem}>
             <Ionicons name="time-outline" size={16} color="#64748B" />

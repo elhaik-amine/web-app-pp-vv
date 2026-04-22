@@ -13,7 +13,8 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  
+  const moroccanCities = ['Casablanca', 'Rabat', 'Marrakech', 'Tanger', 'Agadir', 'Fès', 'Meknès', 'Oujda'];
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -159,19 +160,21 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={20} color="#64748B" />
-          <TextInput 
-            placeholder="Rechercher un service..." 
-            style={styles.searchInput} 
-            placeholderTextColor="#64748B"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={() => navigation.navigate('ProviderList', { search: searchQuery })}
-          />
-        </View>
+      {/* City Filter */}
+      <View style={styles.cityFilterContainer}>
+        <Text style={styles.cityFilterTitle}>Où cherchez-vous un pro ?</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cityList}>
+          {moroccanCities.map(city => (
+            <TouchableOpacity 
+              key={city} 
+              style={styles.cityChip}
+              onPress={() => navigation.navigate('ProviderList', { city: city })}
+            >
+              <Ionicons name="location-outline" size={16} color="#1A73E8" />
+              <Text style={styles.cityChipText}>{city}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Hero Banner */}
@@ -260,9 +263,11 @@ const styles = StyleSheet.create({
   userName: { fontSize: 24, fontWeight: '800', color: '#191C23', marginTop: 4 },
   notificationBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', elevation: 2 },
   unreadDot: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
-  searchContainer: { paddingHorizontal: 24, marginBottom: 24 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 16, height: 56, elevation: 2 },
-  searchInput: { flex: 1, marginLeft: 12, fontSize: 16, color: '#191C23' },
+  cityFilterContainer: { marginBottom: 24 },
+  cityFilterTitle: { fontSize: 16, fontWeight: '700', color: '#191C23', paddingHorizontal: 24, marginBottom: 12 },
+  cityList: { paddingHorizontal: 24, paddingRight: 8 },
+  cityChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginRight: 12, elevation: 2 },
+  cityChipText: { fontSize: 14, fontWeight: '600', color: '#191C23', marginLeft: 6 },
   heroBanner: { marginHorizontal: 24, marginBottom: 32, backgroundColor: '#1A73E8', borderRadius: 20, padding: 20, elevation: 4 },
   heroTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 8 },
   heroSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginBottom: 16 },

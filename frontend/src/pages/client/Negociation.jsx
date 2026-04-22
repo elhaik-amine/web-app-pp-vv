@@ -24,7 +24,7 @@ const NegociationScreen = ({ navigation, route }) => {
 
   const { bookingId } = route.params || {};
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
-  const SOCKET_URL = 'http://192.168.1.10:5000';
+  const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL.replace('/api', '');
   const scrollViewRef = useRef();
   const socketRef = useRef(null);
 
@@ -283,7 +283,7 @@ const NegociationScreen = ({ navigation, route }) => {
                 {userRole === 'PROVIDER' ? booking?.client_name : booking?.provider_name}
               </Text>
               <Text style={styles.summaryDetails}>
-                {booking?.category_name} — {booking?.booking_date ? new Date(booking.booking_date).toLocaleDateString() : ''}
+                {booking?.category_name} — {booking?.date_meeting ? new Date(booking.date_meeting).toLocaleDateString() : ''}
               </Text>
             </View>
           </View>
