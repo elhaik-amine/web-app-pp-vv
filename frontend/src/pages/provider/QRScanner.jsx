@@ -24,6 +24,7 @@ const { width, height } = Dimensions.get('window');
 const QRScannerScreen = ({ navigation, route }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const isProcessing = React.useRef(false); // synchronous lock — useState is async so can't guard alone
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
@@ -95,7 +96,7 @@ const QRScannerScreen = ({ navigation, route }) => {
       });
       
       const result = await response.json();
-      console.log('Verify result:', result);
+      // console.log('Verify result:', result);
       
       if (result.success) {
         Alert.alert(
@@ -105,8 +106,8 @@ const QRScannerScreen = ({ navigation, route }) => {
             {
               text: 'OK',
               onPress: () => {
-                setModalVisible(false);
-                setManualCode('');
+        setModalVisible(false);
+        setManualCode('');
                 // Navigate back to BookingDetail to show the complete button
                 navigation.replace('BookingDetail', { bookingId: booking?.id });
               },
@@ -118,20 +119,19 @@ const QRScannerScreen = ({ navigation, route }) => {
         setScanned(false);
       }
     } catch (error) {
-      console.log('Error:', error);
+      // console.log('Error:', error);
       Alert.alert('Erreur', 'Impossible de vérifier le code');
       setScanned(false);
     } finally {
       setVerifying(false);
+      isProcessing.current = false;
     }
   };
 
   const handleBarCodeScanned = ({ type, data }) => {
-    if (scanned || verifying) return;
-    
+    if (isProcessing.current) return; // synchronous guard — fires before state update
+    isProcessing.current = true;
     setScanned(true);
-    console.log('QR Scanned:', data);
-    
     verifyQRCode(data);
   };
 
