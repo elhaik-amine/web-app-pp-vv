@@ -31,8 +31,9 @@ const ProviderDashboard = ({ navigation }) => {
   const acceptingBookingRef = useRef(null);
   const [stats, setStats] = useState({
     missions: 0,
-    rating: 0,
-    successRate: 98,
+    rating: null,
+    totalReviews: 0,
+    successRate: 0,
   });
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -103,10 +104,13 @@ const ProviderDashboard = ({ navigation }) => {
         });
         const data = await response.json();
         if (data.success) {
+          const totalReviews = Number(data.data.total_reviews || 0);
+          const rating = totalReviews > 0 ? Number(data.data.rating || 0) : null;
           setStats({
             missions: data.data.total_bookings || 0,
-            rating: data.data.rating || 0,
-            successRate: data.data.success_rate || 98,
+            rating,
+            totalReviews,
+            successRate: Number(data.data.success_rate || 0),
           });
         }
       }
@@ -213,7 +217,7 @@ const ProviderDashboard = ({ navigation }) => {
 
   const statsCards = [
     { id: '1', label: 'Missions', value: stats.missions.toString(), icon: 'briefcase' },
-    { id: '2', label: 'Note', value: `${stats.rating} ⭐`, icon: 'star' },
+    { id: '2', label: stats.totalReviews > 0 ? `${stats.totalReviews} avis` : 'Note', value: stats.rating === null ? '-' : `${stats.rating.toFixed(2)} ⭐`, icon: 'star' },
     { id: '3', label: 'Taux succès', value: `${stats.successRate}%`, icon: 'trending-up' },
   ];
 
