@@ -13,7 +13,7 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const [rows] = await pool.execute(
-      'SELECT id, name, email, role, status, token_balance FROM users WHERE id = ?',
+      'SELECT id, name, email, role, status, suspended_until, token_balance FROM users WHERE id = ?',
       [decoded.id]
     );
 
@@ -22,6 +22,26 @@ const protect = async (req, res, next) => {
     }
 
     req.user = rows[0];
+
+    // Auto-lift timed suspensions that have expired
+    if (req.user.status === 'SUSPENDED' && req.user.suspended_until) {
+      const now = new Date();
+      const until = new Date(req.user.suspended_until);
+      if (now >= until) {
+        await pool.execute(
+          "UPDATE users SET status = 'ACTIVE', suspended_until = NULL WHERE id = ?",
+          [req.user.id]
+        );
+        req.user.status = 'ACTIVE';
+        req.user.suspended_until = null;
+      }
+    }
+
+    // Block suspended or banned accounts immediately on any protected request
+    if (['SUSPENDED', 'BANNED'].includes(req.user.status)) {
+      return res.status(403).json({ success: false, message: 'Your account has been suspended or banned', status: req.user.status });
+    }
+
     next();
   } catch (error) {
     res.status(401).json({ success: false, message: 'Not authorized, token failed' });
@@ -38,10 +58,10 @@ const role = (...roles) => {
   };
 };
 
-// Block suspended accounts
+// Block suspended or banned accounts (kept for explicit use on specific routes)
 const restricted = (req, res, next) => {
-  if (req.user.status === 'SUSPENDED') {
-    return res.status(403).json({ success: false, message: 'Your account has been suspended' });
+  if (['SUSPENDED', 'BANNED'].includes(req.user.status)) {
+    return res.status(403).json({ success: false, message: 'Your account has been suspended or banned', status: req.user.status });
   }
   next();
 };

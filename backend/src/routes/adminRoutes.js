@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getDashboard, getUsers, warnUser, restrictUser, suspendUser, deleteUser,
+  getDashboard, getUsers, warnUser, restrictUser, suspendUser, activateUser, deleteUser,
   getReports, updateReport, getBookings, completeBooking, getTokenStats,
   loginAdmin,
 } = require('../controllers/adminController');
@@ -16,6 +16,7 @@ router.get('/users',                  ...admin, getUsers);
 router.patch('/users/:id/warn',       ...admin, warnUser);
 router.patch('/users/:id/restrict',   ...admin, restrictUser);
 router.patch('/users/:id/suspend',    ...admin, suspendUser);
+router.patch('/users/:id/activate',   ...admin, activateUser);
 router.delete('/users/:id',           ...admin, deleteUser);
 router.get('/reports',                ...admin, getReports);
 router.patch('/reports/:id',          ...admin, updateReport);
