@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const { pool } = require('../config/db');
 const { getIO } = require('../socket');
+const {
+  NO_SHOW_RESPONSE_HOURS,
+  getBookingWindow,
+  syncNoShowDisputes,
+} = require('../utils/noShowDisputes');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const ALL_SLOTS = ['08:00-12:00', '12:00-15:00', '15:00-18:00', '18:00-21:00'];
@@ -632,12 +637,23 @@ const getBookingPhotos = async (req, res) => {
     }
 
     const [rows] = await pool.execute(
-      'SELECT * FROM booking_photos WHERE booking_id = ? ORDER BY type, sort_order',
-      [bookingId]
+      `SELECT *
+       FROM booking_photos
+       WHERE booking_id = ?
+         AND (
+           (type = 'BEFORE' AND uploaded_by = ?)
+           OR (type = 'AFTER' AND uploaded_by = ?)
+         )
+       ORDER BY type, sort_order`,
+      [bookingId, booking.client_id, booking.provider_id]
     );
 
-    const beforePhotos = rows.filter((p) => p.type === 'BEFORE').map((p) => p.url);
-    const afterPhotos = rows.filter((p) => p.type === 'AFTER').map((p) => p.url);
+    const beforePhotos = rows
+      .filter((p) => p.type === 'BEFORE' && Number(p.uploaded_by) === Number(booking.client_id))
+      .map((p) => p.url);
+    const afterPhotos = rows
+      .filter((p) => p.type === 'AFTER' && Number(p.uploaded_by) === Number(booking.provider_id))
+      .map((p) => p.url);
 
     return res.json({
       success: true,
@@ -661,6 +677,18 @@ const uploadAfterImages = async (req, res) => {
       return res.status(400).json({ success: false, message: 'At least one image is required' });
     }
 
+    if (images.length > 10) {
+      return res.status(400).json({ success: false, message: 'Maximum 10 after images allowed' });
+    }
+
+    const invalidImage = images.find((image) => typeof image !== 'string' || !/^https?:\/\//i.test(image));
+    if (invalidImage) {
+      return res.status(400).json({
+        success: false,
+        message: 'After images must be uploaded first and sent as public URLs',
+      });
+    }
+
     const booking = await getBooking(bookingId);
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
@@ -673,6 +701,11 @@ const uploadAfterImages = async (req, res) => {
     if (booking.status !== 'IN_PROGRESS') {
       return res.status(400).json({ success: false, message: `Cannot upload after images for status: ${booking.status}` });
     }
+
+    await pool.execute(
+      "DELETE FROM booking_photos WHERE booking_id = ? AND type = 'AFTER'",
+      [bookingId]
+    );
 
     for (let i = 0; i < images.length; i += 1) {
       await pool.execute(
@@ -820,6 +853,156 @@ const createReview = async (req, res) => {
   }
 };
 
+// ─── POST /api/bookings/:id/report-noshow ────────────────────────────────────
+const reportNoShow = async (req, res) => {
+  try {
+    await syncNoShowDisputes(pool);
+
+    const {
+      description,
+      evidence_photo_url,
+      evidence_latitude,
+      evidence_longitude,
+      evidence_captured_at,
+    } = req.body;
+    const bookingId = req.params.id;
+
+    const booking = await getBooking(bookingId);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    // Only the client or the provider of this booking can report a no-show
+    if (booking.client_id !== req.user.id && booking.provider_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    // Only makes sense on a CONFIRMED booking
+    if (booking.status !== 'CONFIRMED') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot report no-show for a booking with status: ${booking.status}`,
+      });
+    }
+
+    const { end: meetingWindowEnd } = getBookingWindow(booking);
+    if (new Date() <= meetingWindowEnd) {
+      return res.status(400).json({
+        success: false,
+        message: 'A no-show can only be reported after the booking time window has ended',
+      });
+    }
+
+    if (!description || String(description).trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a short description with at least 10 characters',
+      });
+    }
+
+    // Prevent duplicate report from the same user for the same booking
+    const [existing] = await pool.execute(
+      "SELECT id FROM reports WHERE booking_id = ? AND reporter_id = ? AND type = 'NOSHOW'",
+      [bookingId, req.user.id]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: 'You already reported a no-show for this booking' });
+    }
+
+    // The reported user is the other party
+    const reportedUserId = req.user.id === booking.client_id
+      ? booking.provider_id
+      : booking.client_id;
+
+    const [counterReports] = await pool.execute(
+      `SELECT id
+       FROM reports
+       WHERE booking_id = ?
+         AND reporter_id = ?
+         AND reported_user_id = ?
+         AND type = 'NOSHOW'
+       LIMIT 1`,
+      [bookingId, reportedUserId, req.user.id]
+    );
+
+    const status = counterReports.length > 0 ? 'UNDER_ADMIN_REVIEW' : 'PENDING_REVIEW';
+    const responseDeadline = counterReports.length > 0
+      ? null
+      : new Date(Date.now() + (NO_SHOW_RESPONSE_HOURS * 60 * 60 * 1000));
+
+    await pool.execute(
+      `INSERT INTO reports (
+         reporter_id, reported_user_id, booking_id, type, description, status,
+         evidence_photo_url, evidence_latitude, evidence_longitude, evidence_captured_at,
+         response_deadline
+       ) VALUES (?, ?, ?, 'NOSHOW', ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.user.id,
+        reportedUserId,
+        bookingId,
+        String(description).trim(),
+        status,
+        evidence_photo_url || null,
+        evidence_latitude || null,
+        evidence_longitude || null,
+        evidence_captured_at || new Date(),
+        responseDeadline,
+      ]
+    );
+
+    if (counterReports.length > 0) {
+      await pool.execute(
+        `UPDATE reports
+         SET status = 'UNDER_ADMIN_REVIEW',
+             response_deadline = NULL,
+             resolution_reason = 'Both parties reported a no-show for this booking'
+         WHERE id = ?`,
+        [counterReports[0].id]
+      );
+
+      await createNotification(
+        reportedUserId,
+        'NOSHOW_DISPUTE_ESCALATED',
+        'Litige d\'absence en revue',
+        `Les deux parties ont signalé une absence pour la réservation #${bookingId}. Un administrateur devra trancher.`,
+        { booking_id: bookingId, report_status: 'UNDER_ADMIN_REVIEW' }
+      );
+
+      await createNotification(
+        req.user.id,
+        'NOSHOW_DISPUTE_ESCALATED',
+        'Litige d\'absence en revue',
+        `Votre contre-signalement pour la réservation #${bookingId} a été envoyé à l'administration.`,
+        { booking_id: bookingId, report_status: 'UNDER_ADMIN_REVIEW' }
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'The no-show dispute has been escalated to admin review',
+        data: { booking_id: Number(bookingId), status: 'UNDER_ADMIN_REVIEW' },
+      });
+    }
+
+    await createNotification(
+      reportedUserId,
+      'NOSHOW_REPORTED',
+      'Absence signalée',
+      `${req.user.name} a signalé votre absence pour la réservation #${bookingId}. Répondez avant ${responseDeadline.toLocaleString()}.`,
+      { booking_id: bookingId, report_status: 'PENDING_REVIEW', response_deadline: responseDeadline }
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'No-show report submitted. The other party has 24 hours to respond.',
+      data: {
+        booking_id: Number(bookingId),
+        status: 'PENDING_REVIEW',
+        response_deadline: responseDeadline,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getAvailableSlots,
   createBooking,
@@ -836,4 +1019,5 @@ module.exports = {
   getBookingPhotos,
   uploadAfterImages,
   createReview,
+  reportNoShow,
 };
