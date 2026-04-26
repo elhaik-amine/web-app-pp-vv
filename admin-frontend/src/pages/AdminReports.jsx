@@ -115,6 +115,26 @@ const AdminReports = () => {
     }
   };
 
+  const renderPhotoStrip = (title, photos = []) => (
+    <div className="case-photo-section">
+      <div className="case-photo-title">
+        <FiImage />
+        <span>{title} ({photos.length})</span>
+      </div>
+      {photos.length > 0 ? (
+        <div className="case-photo-grid">
+          {photos.map((photo) => (
+            <a key={photo.id || photo.url} href={photo.url} target="_blank" rel="noreferrer" className="case-photo-link">
+              <img src={photo.url} alt={title} />
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="case-empty-text">Aucune photo.</p>
+      )}
+    </div>
+  );
+
   return (
     <div className="reports-container animate-fade-in">
       <header className="page-header reports-header">
@@ -173,6 +193,32 @@ const AdminReports = () => {
                 </p>
                 <p className="report-description">{report.description || 'Aucune description fournie.'}</p>
 
+                {report.booking && (
+                  <div className="booking-case-box">
+                    <div className="booking-case-header">
+                      <strong>RÃ©servation #{report.booking.id}</strong>
+                      <span>{report.booking.status}</span>
+                    </div>
+                    <div className="booking-case-grid">
+                      <span>Client</span>
+                      <strong>{report.booking.client?.name || '-'}</strong>
+                      <span>Prestataire</span>
+                      <strong>{report.booking.provider?.name || '-'}</strong>
+                      <span>Prix</span>
+                      <strong>{report.booking.agreed_price || report.booking.estimated_price || 0} MAD</strong>
+                      <span>CrÃ©neau</span>
+                      <strong>
+                        {report.booking.date_meeting
+                          ? `${new Date(report.booking.date_meeting).toLocaleDateString()} â€¢ ${report.booking.time_slot}`
+                          : '-'}
+                      </strong>
+                    </div>
+                    {report.booking.notes && (
+                      <p className="booking-notes">{report.booking.notes}</p>
+                    )}
+                  </div>
+                )}
+
                 {report.response_deadline && (
                   <div className="info-chip">
                     <FiClock />
@@ -181,10 +227,22 @@ const AdminReports = () => {
                 )}
 
                 {report.evidence_photo_url && (
-                  <a className="evidence-link" href={report.evidence_photo_url} target="_blank" rel="noreferrer">
-                    <FiImage />
-                    <span>Voir la photo preuve</span>
-                  </a>
+                  <div className="case-photo-section">
+                    <div className="case-photo-title">
+                      <FiImage />
+                      <span>Preuve du signalement</span>
+                    </div>
+                    <a className="evidence-preview" href={report.evidence_photo_url} target="_blank" rel="noreferrer">
+                      <img src={report.evidence_photo_url} alt="Preuve du signalement" />
+                    </a>
+                  </div>
+                )}
+
+                {report.booking && (
+                  <div className="case-photos-wrapper">
+                    {renderPhotoStrip('Photos avant client', report.booking.photos?.before)}
+                    {renderPhotoStrip('Photos aprÃ¨s prestataire', report.booking.photos?.after)}
+                  </div>
                 )}
 
                 {report.resolution_reason && (

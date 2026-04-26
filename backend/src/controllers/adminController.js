@@ -181,14 +181,36 @@ const getReports = async (req, res) => {
     let sql = `
       SELECT r.*,
              reporter.name AS reporter_name,
+             reporter.email AS reporter_email,
+             reporter.phone AS reporter_phone,
+             reporter.role AS reporter_role,
              reported.name AS reported_user_name,
+             reported.email AS reported_user_email,
+             reported.phone AS reported_user_phone,
+             reported.role AS reported_user_role,
+             b.client_id,
+             b.provider_id,
              b.date_meeting,
              b.time_slot,
-             b.status AS booking_status
+             b.status AS booking_status,
+             b.estimated_price,
+             b.agreed_price,
+             b.notes AS booking_notes,
+             b.qr_active_from,
+             b.qr_active_until,
+             b.created_at AS booking_created_at,
+             client.name AS client_name,
+             client.email AS client_email,
+             client.phone AS client_phone,
+             provider.name AS provider_name,
+             provider.email AS provider_email,
+             provider.phone AS provider_phone
       FROM reports r
       LEFT JOIN users reporter ON reporter.id = r.reporter_id
       LEFT JOIN users reported ON reported.id = r.reported_user_id
       LEFT JOIN bookings b ON b.id = r.booking_id
+      LEFT JOIN users client ON client.id = b.client_id
+      LEFT JOIN users provider ON provider.id = b.provider_id
       WHERE 1=1
     `;
     const params = [];
@@ -197,7 +219,84 @@ const getReports = async (req, res) => {
     sql += ' ORDER BY r.created_at DESC';
 
     const [rows] = await pool.execute(sql, params);
-    res.json({ success: true, data: rows, message: 'OK' });
+    const bookingIds = [...new Set(rows.map((row) => row.booking_id).filter(Boolean))];
+
+    let photosByBooking = {};
+    if (bookingIds.length > 0) {
+      const placeholders = bookingIds.map(() => '?').join(',');
+      const [photoRows] = await pool.execute(
+        `SELECT bp.id, bp.booking_id, bp.uploaded_by, bp.type, bp.url, bp.description, bp.sort_order, bp.created_at,
+                uploader.name AS uploaded_by_name,
+                uploader.role AS uploaded_by_role
+         FROM booking_photos bp
+         LEFT JOIN users uploader ON uploader.id = bp.uploaded_by
+         WHERE bp.booking_id IN (${placeholders})
+         ORDER BY bp.booking_id, bp.type, bp.sort_order, bp.created_at`,
+        bookingIds
+      );
+
+      photosByBooking = photoRows.reduce((acc, photo) => {
+        if (!acc[photo.booking_id]) {
+          acc[photo.booking_id] = { before: [], after: [] };
+        }
+
+        const normalizedPhoto = {
+          id: photo.id,
+          url: photo.url,
+          description: photo.description,
+          sort_order: photo.sort_order,
+          uploaded_by: photo.uploaded_by,
+          uploaded_by_name: photo.uploaded_by_name,
+          uploaded_by_role: photo.uploaded_by_role,
+          created_at: photo.created_at,
+        };
+
+        if (photo.type === 'BEFORE') {
+          acc[photo.booking_id].before.push(normalizedPhoto);
+        } else if (photo.type === 'AFTER') {
+          acc[photo.booking_id].after.push(normalizedPhoto);
+        }
+
+        return acc;
+      }, {});
+    }
+
+    const data = rows.map((row) => ({
+      ...row,
+      booking: row.booking_id ? {
+        id: row.booking_id,
+        status: row.booking_status,
+        date_meeting: row.date_meeting,
+        time_slot: row.time_slot,
+        estimated_price: row.estimated_price,
+        agreed_price: row.agreed_price,
+        notes: row.booking_notes,
+        qr_active_from: row.qr_active_from,
+        qr_active_until: row.qr_active_until,
+        created_at: row.booking_created_at,
+        client: {
+          id: row.client_id,
+          name: row.client_name,
+          email: row.client_email,
+          phone: row.client_phone,
+        },
+        provider: {
+          id: row.provider_id,
+          name: row.provider_name,
+          email: row.provider_email,
+          phone: row.provider_phone,
+        },
+        photos: photosByBooking[row.booking_id] || { before: [], after: [] },
+      } : null,
+      evidence: {
+        photo_url: row.evidence_photo_url,
+        latitude: row.evidence_latitude,
+        longitude: row.evidence_longitude,
+        captured_at: row.evidence_captured_at,
+      },
+    }));
+
+    res.json({ success: true, data, message: 'OK' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
