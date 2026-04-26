@@ -18,15 +18,25 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle 401 unauthorized
+// Handle 401 unauthorized and 403 suspended/banned
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
       await AsyncStorage.removeItem('khidmati_token');
       await AsyncStorage.removeItem('khidmati_user');
-      // Navigation will be handled by the component
     }
+
+    if (error.response?.status === 403) {
+      const data = error.response?.data;
+      if (data?.status === 'SUSPENDED' || data?.status === 'BANNED') {
+        await AsyncStorage.removeItem('khidmati_token');
+        await AsyncStorage.removeItem('khidmati_user');
+        // Store a flag so the login screen can show a message
+        await AsyncStorage.setItem('khidmati_suspended', data.status);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -151,6 +161,11 @@ export const completeBooking = async (bookingId) => {
 
 export const submitReview = async (bookingId, rating, comment) => {
   const response = await api.post(`/bookings/${bookingId}/review`, { rating, comment });
+  return response.data;
+};
+
+export const submitNoShowReport = async (bookingId, payload) => {
+  const response = await api.post(`/bookings/${bookingId}/report-noshow`, payload);
   return response.data;
 };
 

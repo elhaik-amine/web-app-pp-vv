@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
   ScrollView, Image, Platform, ActivityIndicator, Alert,
@@ -10,26 +10,107 @@ const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
 const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+const requireApiConfig = () => {
+  if (!API_URL) throw new Error('EXPO_PUBLIC_API_URL is missing');
+};
+
+const requireCloudinaryConfig = () => {
+  if (!CLOUDINARY_URL) throw new Error('EXPO_PUBLIC_CLOUDINARY_URL is missing');
+  if (!CLOUDINARY_PRESET) throw new Error('EXPO_PUBLIC_CLOUDINARY_PRESET is missing');
+};
+
 // ─── Upload a single local URI to Cloudinary ──────────────────────────────────
-const uploadToCloudinary = async (uri) => {
+const getCloudinaryCloudName = () => {
+  const match = CLOUDINARY_URL?.match(/\/v1_1\/([^/]+)\//);
+  return match?.[1] || 'unknown';
+};
+
+const uploadToCloudinary = async (photo) => {
+  requireCloudinaryConfig();
+
+  if (!photo?.uri) {
+    throw new Error('Photo URI is missing');
+  }
+
   const formData = new FormData();
-  const filename = uri.split('/').pop();
-  const ext = filename.split('.').pop() || 'jpg';
-  formData.append('file', { uri, name: filename, type: `image/${ext}` });
+  formData.append('file', {
+    uri: photo.uri,
+    type: photo.mimeType || 'image/jpeg',
+    name: photo.fileName || `booking_${Date.now()}.jpg`,
+  });
   formData.append('upload_preset', CLOUDINARY_PRESET);
 
-  const response = await fetch(CLOUDINARY_URL, {
-    method: 'POST',
-    body: formData,
+  const uploadWithUri = () => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.open('POST', CLOUDINARY_URL);
+    xhr.onload = () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        reject(new Error('Cloudinary returned an invalid response'));
+        return;
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300 && data.secure_url) {
+        console.log('Cloudinary upload ok:', {
+          cloudName: getCloudinaryCloudName(),
+          publicId: data.public_id,
+        });
+        resolve(data.secure_url);
+        return;
+      }
+
+      reject(new Error(data.error?.message || `Cloudinary upload failed (${xhr.status})`));
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Cloudinary upload network error'));
+    };
+
+    xhr.send(formData);
   });
-  const data = await response.json();
-  if (!data.secure_url) throw new Error('Cloudinary upload failed');
-  return data.secure_url;
+
+  try {
+    return await uploadWithUri();
+  } catch (uriError) {
+    if (!photo.base64) {
+      throw uriError;
+    }
+
+    console.log('Cloudinary URI upload failed, retrying with base64:', {
+      message: uriError.message,
+      cloudName: getCloudinaryCloudName(),
+    });
+
+    const response = await fetch(CLOUDINARY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file: `data:${photo.mimeType || 'image/jpeg'};base64,${photo.base64}`,
+        upload_preset: CLOUDINARY_PRESET,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.secure_url) {
+      throw new Error(data.error?.message || `Cloudinary base64 upload failed (${response.status})`);
+    }
+
+    console.log('Cloudinary upload ok:', {
+      cloudName: getCloudinaryCloudName(),
+      publicId: data.public_id,
+      fallback: 'base64',
+    });
+    return data.secure_url;
+  }
 };
 
 const BookingStep4Screen = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
   const [phase, setPhase] = useState(''); // 'photos' | 'booking' | 'saving'
+  const submittingRef = useRef(false);
 
   const {
     providerId,
@@ -42,20 +123,39 @@ const BookingStep4Screen = ({ navigation, route }) => {
   } = route.params || {};
 
   const handleConfirm = async () => {
-    setSubmitting(true);
-    try {
-      const token = await AsyncStorage.getItem('khidmati_token');
+    if (submittingRef.current) {
+      return;
+    }
 
-      // ── Phase 1: Upload photos to Cloudinary ─────────────────────────────
-      setPhase('photos');
-      const uploadedUrls = [];
-      for (let i = 0; i < photos.length; i++) {
-        const url = await uploadToCloudinary(photos[i].uri);
-        uploadedUrls.push(url);
+    submittingRef.current = true;
+    setSubmitting(true);
+    let currentPhase = '';
+    const updatePhase = (nextPhase) => {
+      currentPhase = nextPhase;
+      setPhase(nextPhase);
+    };
+
+    try {
+      requireApiConfig();
+
+      const token = await AsyncStorage.getItem('khidmati_token');
+      if (!token) {
+        throw new Error('Authentication token missing');
       }
 
-      // ── Phase 2: Create the booking ──────────────────────────────────────
-      setPhase('booking');
+      if (!photos?.length) {
+        throw new Error('Veuillez ajouter au moins une photo avant la réservation');
+      }
+
+      updatePhase('photos');
+      const uploadedUrls = [];
+      for (let i = 0; i < photos.length; i += 1) {
+        const photoUrl = await uploadToCloudinary(photos[i]);
+        uploadedUrls.push(photoUrl);
+      }
+
+      // Upload before photos first so the provider never receives a booking without evidence photos.
+      updatePhase('booking');
       const bookingRes = await fetch(`${API_URL}/bookings`, {
         method: 'POST',
         headers: {
@@ -77,37 +177,61 @@ const BookingStep4Screen = ({ navigation, route }) => {
       }
       const bookingId = bookingData.data?.id || bookingData.id;
 
-      // ── Phase 3: Save client BEFORE photos to booking_photos table ───────
-      setPhase('saving');
+      updatePhase('saving');
+      let photosSaved = 0;
+
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
-        const photoUrl = uploadedUrls[i] || photo.uri;
 
-        await fetch(`${API_URL}/bookings/${bookingId}/photos`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'BEFORE',
-            url: photoUrl,
-            description: i === 0 ? description : null, // attach description to first photo
-            sort_order: photo.sort_order || i + 1,
-          }),
-        });
+        try {
+          const photoUrl = uploadedUrls[i];
+
+          updatePhase('saving');
+          const savePhotoRes = await fetch(`${API_URL}/bookings/${bookingId}/photos`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: 'BEFORE',
+              url: photoUrl,
+              description: i === 0 ? description : null,
+              sort_order: photo.sort_order || i + 1,
+            }),
+          });
+
+          const savePhotoData = await savePhotoRes.json();
+          if (!savePhotoRes.ok || !savePhotoData.success) {
+            throw new Error(savePhotoData.message || 'Failed to save booking photo');
+          }
+
+          photosSaved += 1;
+        } catch (photoError) {
+          console.log('Booking photo upload skipped:', {
+            message: photoError.message,
+            bookingId,
+            index: i,
+          });
+          throw photoError;
+        }
       }
 
-      // ── Done ─────────────────────────────────────────────────────────────
       Alert.alert(
         '✅ Réservation envoyée',
-        'Votre demande a été envoyée au prestataire. Il pourra accepter ou négocier le prix.',
-        [{ text: 'OK', onPress: () => { navigation.popToTop(); navigation.navigate('HomeClient'); } }],
+        `Votre demande a été envoyée au prestataire avec ${photosSaved} photo(s). Il pourra accepter ou négocier le prix.`,
+        [{ text: 'OK', onPress: () => navigation.replace('BookingDetail', { bookingId }) }],
       );
     } catch (error) {
-      console.log('Booking error:', error);
-      Alert.alert('Erreur', "Une erreur est survenue. Vérifiez votre connexion et réessayez.");
+      console.log('Booking error:', {
+        message: error.message,
+        phase: currentPhase,
+        apiUrl: API_URL,
+        cloudinaryUrl: CLOUDINARY_URL,
+      });
+      Alert.alert('Erreur', error.message || "Une erreur est survenue. Vérifiez votre connexion et réessayez.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
       setPhase('');
     }

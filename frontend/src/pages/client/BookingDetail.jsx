@@ -2,17 +2,28 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   ScrollView, Image, TouchableOpacity,
-  ActivityIndicator, Alert, Linking,
+  ActivityIndicator, Alert, Linking, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+
+const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
+const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
 
 const BookingDetailScreen = ({ navigation, route }) => {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [userRole, setUserRole] = useState('');
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [tokenBalance, setTokenBalance] = useState(0);
+  const [noShowReports, setNoShowReports] = useState([]);
+  const [showNoShowForm, setShowNoShowForm] = useState(false);
+  const [reportDescription, setReportDescription] = useState('');
+  const [evidencePhotoUrl, setEvidencePhotoUrl] = useState('');
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [submittingReport, setSubmittingReport] = useState(false);
   
   const { bookingId } = route.params || {};
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -41,6 +52,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
       if (userData) {
         const user = JSON.parse(userData);
         setUserRole(user.role);
+        setCurrentUserId(user.id);
         if (user.role === 'PROVIDER') {
           fetchTokenBalance();
         }
@@ -65,6 +77,90 @@ const BookingDetailScreen = ({ navigation, route }) => {
     }
   };
 
+  const goBackOrFallback = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    if (userRole === 'PROVIDER') {
+      navigation.navigate('ProviderDashboard');
+      return;
+    }
+
+    navigation.navigate('MesReservations');
+  };
+
+  const uploadToCloudinary = async (uri) => {
+    const formData = new FormData();
+    const filename = uri.split('/').pop();
+    const ext = filename?.split('.').pop() || 'jpg';
+
+    formData.append('file', { uri, name: filename || `evidence.${ext}`, type: `image/${ext}` });
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+
+    const response = await fetch(CLOUDINARY_URL, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!data.secure_url) {
+      throw new Error(data.error?.message || 'Cloudinary upload failed');
+    }
+
+    return data.secure_url;
+  };
+
+  const pickEvidenceImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Autorisez l\'accès à la galerie pour ajouter une preuve photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        return;
+      }
+
+      setUploadingEvidence(true);
+      const uploadedUrl = await uploadToCloudinary(result.assets[0].uri);
+      setEvidencePhotoUrl(uploadedUrl);
+    } catch (error) {
+      Alert.alert('Erreur', error.message || 'Impossible de téléverser la preuve photo');
+    } finally {
+      setUploadingEvidence(false);
+    }
+  };
+
+  const fetchNoShowReports = async (providedToken = null) => {
+    try {
+      const token = providedToken || await AsyncStorage.getItem('khidmati_token');
+      const response = await fetch(`${API_URL}/reports`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        const filteredReports = (data.data || []).filter(
+          (report) => Number(report.booking_id) === Number(bookingId) && report.type === 'NOSHOW'
+        );
+        setNoShowReports(filteredReports);
+      }
+    } catch (error) {
+      console.log('Error fetching no-show reports:', error);
+    }
+  };
+
   const fetchBookingDetails = async () => {
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
@@ -81,9 +177,10 @@ const BookingDetailScreen = ({ navigation, route }) => {
       
       if (data.success) {
         setBooking(data.data);
+        await fetchNoShowReports(token);
       } else {
         Alert.alert('Erreur', data.message || 'Réservation non trouvée');
-        navigation.goBack();
+        goBackOrFallback();
       }
     } catch (error) {
       console.log('Error fetching booking:', error);
@@ -119,7 +216,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
               
               if (data.success) {
                 Alert.alert('Succès', 'Réservation annulée');
-                navigation.goBack();
+                goBackOrFallback();
               } else {
                 Alert.alert('Erreur', data.message || 'Erreur lors de l\'annulation');
               }
@@ -136,41 +233,79 @@ const BookingDetailScreen = ({ navigation, route }) => {
   };
 
   const reportNoShow = async () => {
-    Alert.alert(
-      'Signaler une absence',
-      'Confirmez-vous que le prestataire ne s\'est pas présenté ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Confirmer',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('khidmati_token');
-              
-              const response = await fetch(`${API_URL}/bookings/${bookingId}/report-noshow`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-              
-              const data = await response.json();
-              
-              if (data.success) {
-                Alert.alert('Succès', 'Signalement envoyé');
-                fetchBookingDetails();
-              } else {
-                Alert.alert('Erreur', data.message);
-              }
-            } catch (error) {
-              console.log('Error reporting:', error);
-              Alert.alert('Erreur', 'Impossible d\'envoyer le signalement');
-            }
-          },
+    if (!reportDescription.trim() || reportDescription.trim().length < 10) {
+      Alert.alert('Description requise', 'Ajoutez au moins 10 caractères pour expliquer ce qui s\'est passé.');
+      return;
+    }
+
+    setSubmittingReport(true);
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+
+      const response = await fetch(`${API_URL}/bookings/${bookingId}/report-noshow`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      ]
-    );
+        body: JSON.stringify({
+          description: reportDescription.trim(),
+          evidence_photo_url: evidencePhotoUrl || null,
+          evidence_captured_at: new Date().toISOString(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        Alert.alert('Succès', data.message || 'Signalement envoyé');
+        setShowNoShowForm(false);
+        setReportDescription('');
+        setEvidencePhotoUrl('');
+        await fetchBookingDetails();
+      } else {
+        Alert.alert('Erreur', data.message || 'Impossible d\'envoyer le signalement');
+      }
+    } catch (error) {
+      console.log('Error reporting:', error);
+      Alert.alert('Erreur', 'Impossible d\'envoyer le signalement');
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
+  const getMeetingWindowEnd = () => {
+    if (!booking) return null;
+    if (booking.qr_active_until) return new Date(booking.qr_active_until);
+
+    const date = new Date(booking.date_meeting);
+    const timeSlotStarts = {
+      '08:00-12:00': 8,
+      '12:00-15:00': 12,
+      '15:00-18:00': 15,
+      '18:00-21:00': 18,
+    };
+
+    const startHour = timeSlotStarts[booking.time_slot] ?? 8;
+    date.setHours(startHour + 3, 0, 0, 0);
+    return date;
+  };
+
+  const getReportStatusMeta = (status) => {
+    switch (status) {
+      case 'PENDING_REVIEW':
+        return { bg: '#FEF3C7', text: '#92400E', label: 'En attente de réponse' };
+      case 'UNDER_ADMIN_REVIEW':
+        return { bg: '#DBEAFE', text: '#1D4ED8', label: 'En revue admin' };
+      case 'AUTO_RESOLVED':
+        return { bg: '#DCFCE7', text: '#166534', label: 'Résolu automatiquement' };
+      case 'RESOLVED':
+        return { bg: '#DCFCE7', text: '#166534', label: 'Résolu' };
+      case 'REJECTED':
+        return { bg: '#FEE2E2', text: '#B91C1C', label: 'Rejeté' };
+      default:
+        return { bg: '#E2E8F0', text: '#475569', label: status || 'Signalement' };
+    }
   };
 
   const getStatusStyles = (status) => {
@@ -226,7 +361,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Réservation non trouvée</Text>
-          <TouchableOpacity style={styles.backButtonSmall} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.backButtonSmall} onPress={goBackOrFallback}>
             <Text style={styles.backButtonText}>Retour</Text>
           </TouchableOpacity>
         </View>
@@ -241,11 +376,22 @@ const BookingDetailScreen = ({ navigation, route }) => {
   const isPending = booking.status === 'PENDING';
   const isInProgress = booking.status === 'IN_PROGRESS';
   const isCompleted = booking.status === 'COMPLETED';
+  const latestNoShowReport = noShowReports[0] || null;
+  const noShowStatus = latestNoShowReport ? getReportStatusMeta(latestNoShowReport.status) : null;
+  const userHasReportedNoShow = noShowReports.some((report) => Number(report.reporter_id) === Number(currentUserId));
+  const otherPartyReportedNoShow = noShowReports.some((report) => Number(report.reporter_id) !== Number(currentUserId));
+  const meetingWindowEnd = getMeetingWindowEnd();
+  const canReportNoShow = Boolean(
+    booking.status === 'CONFIRMED' &&
+    meetingWindowEnd &&
+    new Date() > meetingWindowEnd &&
+    !userHasReportedNoShow
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={goBackOrFallback}>
           <Ionicons name="arrow-back" size={24} color="#191C23" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Détail Réservation</Text>
@@ -390,6 +536,103 @@ const BookingDetailScreen = ({ navigation, route }) => {
           </View>
         </View>
 
+        {(latestNoShowReport || canReportNoShow) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Absence et litige</Text>
+
+            {latestNoShowReport && noShowStatus && (
+              <View style={styles.disputeCard}>
+                <View style={styles.disputeHeader}>
+                  <Text style={styles.disputeTitle}>Signalement d'absence</Text>
+                  <View style={[styles.disputeBadge, { backgroundColor: noShowStatus.bg }]}>
+                    <Text style={[styles.disputeBadgeText, { color: noShowStatus.text }]}>
+                      {noShowStatus.label}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.disputeText}>
+                  {Number(latestNoShowReport.reporter_id) === Number(currentUserId)
+                    ? 'Votre signalement a bien été enregistré.'
+                    : 'L\'autre partie a signalé votre absence.'}
+                </Text>
+
+                {!!latestNoShowReport.description && (
+                  <Text style={styles.disputeDescription}>{latestNoShowReport.description}</Text>
+                )}
+
+                {!!latestNoShowReport.response_deadline && latestNoShowReport.status === 'PENDING_REVIEW' && (
+                  <Text style={styles.disputeMeta}>
+                    Date limite de réponse : {new Date(latestNoShowReport.response_deadline).toLocaleString('fr-FR')}
+                  </Text>
+                )}
+
+                {!!latestNoShowReport.evidence_photo_url && (
+                  <Image source={{ uri: latestNoShowReport.evidence_photo_url }} style={styles.disputeImage} />
+                )}
+              </View>
+            )}
+
+            {canReportNoShow && (showNoShowForm || otherPartyReportedNoShow) && (
+              <View style={styles.disputeFormCard}>
+                <Text style={styles.disputeFormTitle}>
+                  {otherPartyReportedNoShow ? 'Répondre avec un contre-signalement' : 'Signaler une absence'}
+                </Text>
+                <Text style={styles.disputeHint}>
+                  Cette action n'est possible qu'après la fin du créneau. Ajoutez une explication claire et, si possible, une photo.
+                </Text>
+
+                <TextInput
+                  style={styles.textArea}
+                  multiline
+                  value={reportDescription}
+                  onChangeText={setReportDescription}
+                  placeholder="Expliquez ce qui s'est passé, quand vous êtes arrivé(e), et pourquoi vous estimez que l'autre partie était absente."
+                  textAlignVertical="top"
+                />
+
+                <TouchableOpacity
+                  style={styles.evidenceButton}
+                  onPress={pickEvidenceImage}
+                  disabled={uploadingEvidence}
+                >
+                  <Ionicons name="image-outline" size={18} color="#1A73E8" />
+                  <Text style={styles.evidenceButtonText}>
+                    {uploadingEvidence ? 'Téléversement...' : evidencePhotoUrl ? 'Photo ajoutée' : 'Ajouter une photo preuve'}
+                  </Text>
+                </TouchableOpacity>
+
+                {!!evidencePhotoUrl && (
+                  <Image source={{ uri: evidencePhotoUrl }} style={styles.evidencePreview} />
+                )}
+
+                <View style={styles.disputeActions}>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => {
+                      setShowNoShowForm(false);
+                      setReportDescription('');
+                      setEvidencePhotoUrl('');
+                    }}
+                  >
+                    <Text style={styles.secondaryButtonText}>Réinitialiser</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, submittingReport && styles.disabledButton]}
+                    onPress={reportNoShow}
+                    disabled={submittingReport}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {submittingReport ? 'Envoi...' : otherPartyReportedNoShow ? 'Envoyer ma réponse' : 'Envoyer le signalement'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Actions */}
         {booking.status !== 'CANCELLED' && booking.status !== 'COMPLETED' && (
           <View style={styles.actionsContainer}>
@@ -406,10 +649,14 @@ const BookingDetailScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             )}
             
-            <TouchableOpacity style={styles.outlineAction} onPress={reportNoShow}>
-              <Ionicons name="flag-outline" size={20} color="#64748B" />
-              <Text style={styles.outlineActionText}>Signaler un problème</Text>
-            </TouchableOpacity>
+            {canReportNoShow && !showNoShowForm && (
+              <TouchableOpacity style={styles.outlineAction} onPress={() => setShowNoShowForm(true)}>
+                <Ionicons name="flag-outline" size={20} color="#64748B" />
+                <Text style={styles.outlineActionText}>
+                  {otherPartyReportedNoShow ? 'Répondre au signalement' : 'Signaler une absence'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -486,6 +733,28 @@ const styles = StyleSheet.create({
   stepTitle: { fontSize: 14, fontWeight: '600', color: '#94A3B8', marginTop: 4 },
   stepTitleCompleted: { color: '#10B981' },
   stepTitleCurrent: { color: '#1A73E8', fontWeight: '800' },
+  disputeCard: { backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 18, padding: 16, marginBottom: 16 },
+  disputeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  disputeTitle: { fontSize: 15, fontWeight: '700', color: '#191C23', flex: 1, marginRight: 12 },
+  disputeBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  disputeBadgeText: { fontSize: 12, fontWeight: '700' },
+  disputeText: { fontSize: 14, color: '#7C2D12', marginBottom: 8 },
+  disputeDescription: { fontSize: 14, color: '#431407', lineHeight: 20, marginBottom: 10 },
+  disputeMeta: { fontSize: 12, color: '#9A3412', marginBottom: 10 },
+  disputeImage: { width: '100%', height: 160, borderRadius: 14, backgroundColor: '#FED7AA' },
+  disputeFormCard: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 18, padding: 16 },
+  disputeFormTitle: { fontSize: 15, fontWeight: '700', color: '#191C23', marginBottom: 6 },
+  disputeHint: { fontSize: 13, color: '#64748B', lineHeight: 19, marginBottom: 14 },
+  textArea: { minHeight: 120, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, backgroundColor: '#FFFFFF', padding: 14, fontSize: 14, color: '#191C23', marginBottom: 12 },
+  evidenceButton: { height: 46, borderRadius: 14, borderWidth: 1, borderColor: '#BFDBFE', backgroundColor: '#EFF6FF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  evidenceButtonText: { marginLeft: 8, color: '#1A73E8', fontSize: 14, fontWeight: '600' },
+  evidencePreview: { width: '100%', height: 180, borderRadius: 14, marginBottom: 12, backgroundColor: '#E2E8F0' },
+  disputeActions: { flexDirection: 'row', gap: 10 },
+  secondaryButton: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  secondaryButtonText: { color: '#475569', fontSize: 14, fontWeight: '600' },
+  primaryButton: { flex: 1, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A73E8' },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  disabledButton: { opacity: 0.6 },
   actionsContainer: { gap: 12 },
   cancelAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: 16, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FEE2E2' },
   cancelActionText: { color: '#EF4444', fontSize: 14, fontWeight: '600', marginLeft: 8 },

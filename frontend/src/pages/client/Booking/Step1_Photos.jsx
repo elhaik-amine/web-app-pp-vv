@@ -30,11 +30,22 @@ const BookingStep1Screen = ({ navigation, route }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.7,
+      quality: 0.5,
+      base64: true,
     });
 
     if (!result.canceled) {
-      setPhotos([...photos, { id: Date.now().toString(), uri: result.assets[0].uri }]);
+      const asset = result.assets[0];
+      setPhotos([
+        ...photos,
+        {
+          id: Date.now().toString(),
+          uri: asset.uri,
+          fileName: asset.fileName || null,
+          mimeType: asset.mimeType || null,
+          base64: asset.base64 || null,
+        },
+      ]);
     }
   };
 
