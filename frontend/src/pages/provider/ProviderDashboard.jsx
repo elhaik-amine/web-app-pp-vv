@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,8 @@ const ProviderDashboard = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('demandes');
   const [socket, setSocket] = useState(null);
+  const socketRef = useRef(null);
+  const acceptingBookingRef = useRef(null);
   const [stats, setStats] = useState({
     missions: 0,
     rating: 0,
@@ -42,6 +44,13 @@ const ProviderDashboard = ({ navigation }) => {
     fetchConfirmedBookings();
     fetchTokenBalance();
     initSocket();
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
   }, []);
 
   const initSocket = async () => {
@@ -69,7 +78,6 @@ const ProviderDashboard = ({ navigation }) => {
       newSocket.on('booking:confirmed', () => {
         fetchPendingBookings();
         fetchConfirmedBookings();
-        Alert.alert('Succès', `Une réservation a été confirmée !`);
       });
       
       newSocket.on('booking:price_updated', () => {
@@ -77,6 +85,7 @@ const ProviderDashboard = ({ navigation }) => {
         fetchConfirmedBookings();
       });
       
+      socketRef.current = newSocket;
       setSocket(newSocket);
     }
   };
@@ -155,10 +164,15 @@ const ProviderDashboard = ({ navigation }) => {
   };
 
   const acceptBooking = async (bookingId) => {
+    if (acceptingBookingRef.current === bookingId) {
+      return;
+    }
+
     if (tokenBalance < 1) {
       Alert.alert('Solde insuffisant', "Vous n'avez pas assez de tokens pour accepter une réservation. Veuillez recharger votre compte.");
       return;
     }
+    acceptingBookingRef.current = bookingId;
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
       const response = await fetch(`${API_URL}/bookings/${bookingId}/confirm`, {
@@ -178,6 +192,8 @@ const ProviderDashboard = ({ navigation }) => {
       }
     } catch (error) {
       console.log('Error accepting booking:', error);
+    } finally {
+      acceptingBookingRef.current = null;
     }
   };
 
