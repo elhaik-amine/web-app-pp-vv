@@ -29,6 +29,14 @@ const createNotification = async (userId, type, title, message, data = null) => 
   } catch (_) {}
 };
 
+const toMysqlDateTime = (value, fallback = null) => {
+  const rawValue = value || fallback;
+  if (!rawValue) return null;
+
+  const date = rawValue instanceof Date ? rawValue : new Date(rawValue);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const getBooking = async (id) => {
   const [rows] = await pool.execute('SELECT * FROM bookings WHERE id = ?', [id]);
   return rows[0] || null;
@@ -943,7 +951,7 @@ const reportNoShow = async (req, res) => {
         evidence_photo_url || null,
         evidence_latitude || null,
         evidence_longitude || null,
-        evidence_captured_at || new Date(),
+        toMysqlDateTime(evidence_captured_at, new Date()),
         responseDeadline,
       ]
     );
@@ -1003,6 +1011,81 @@ const reportNoShow = async (req, res) => {
   }
 };
 
+// ─── POST /api/bookings/:id/report-work ──────────────────────────────────────
+const reportWorkQuality = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { description, evidence_photo_url } = req.body;
+
+    const booking = await getBooking(bookingId);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    if (booking.client_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the client can report work quality for this booking' });
+    }
+
+    if (booking.status !== 'COMPLETED') {
+      return res.status(400).json({
+        success: false,
+        message: `Can only report work quality after completion. Current status: ${booking.status}`,
+      });
+    }
+
+    if (!description || String(description).trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide at least 10 characters explaining what was not respected',
+      });
+    }
+
+    if (!evidence_photo_url) {
+      return res.status(400).json({
+        success: false,
+        message: 'A real-time evidence photo is required for work quality disputes',
+      });
+    }
+
+    const [existing] = await pool.execute(
+      "SELECT id FROM reports WHERE booking_id = ? AND reporter_id = ? AND type = 'OTHER' AND status IN ('PENDING', 'PENDING_REVIEW', 'UNDER_ADMIN_REVIEW')",
+      [bookingId, req.user.id]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: 'A dispute is already open for this completed booking' });
+    }
+
+    const [result] = await pool.execute(
+      `INSERT INTO reports (
+         reporter_id, reported_user_id, booking_id, type, description, status,
+         evidence_photo_url, evidence_captured_at
+       ) VALUES (?, ?, ?, 'OTHER', ?, 'UNDER_ADMIN_REVIEW', ?, ?)`,
+      [
+        req.user.id,
+        booking.provider_id,
+        bookingId,
+        `Travail non conforme: ${String(description).trim()}`,
+        evidence_photo_url || null,
+        new Date(),
+      ]
+    );
+
+    await createNotification(
+      booking.provider_id,
+      'WORK_QUALITY_REPORTED',
+      'Litige sur la mission',
+      `Le client a signalé que la mission #${bookingId} ne correspond pas à ce qui était convenu. Un administrateur va examiner le dossier.`,
+      { booking_id: bookingId, report_id: result.insertId }
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Votre litige a été envoyé à l’administration pour examen.',
+      data: { id: result.insertId, booking_id: Number(bookingId), status: 'UNDER_ADMIN_REVIEW' },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getAvailableSlots,
   createBooking,
@@ -1020,4 +1103,5 @@ module.exports = {
   uploadAfterImages,
   createReview,
   reportNoShow,
+  reportWorkQuality,
 };

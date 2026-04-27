@@ -112,15 +112,15 @@ const BookingDetailScreen = ({ navigation, route }) => {
     return data.secure_url;
   };
 
-  const pickEvidenceImage = async () => {
+  const takeEvidencePhoto = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission requise', 'Autorisez l\'accès à la galerie pour ajouter une preuve photo.');
+        Alert.alert('Permission requise', 'Autorisez l\'accès à la caméra pour prendre une preuve en temps réel.');
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
       });
@@ -251,7 +251,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
         body: JSON.stringify({
           description: reportDescription.trim(),
           evidence_photo_url: evidencePhotoUrl || null,
-          evidence_captured_at: new Date().toISOString(),
+          evidence_captured_at: new Date(),
         }),
       });
 
@@ -387,6 +387,15 @@ const BookingDetailScreen = ({ navigation, route }) => {
     new Date() > meetingWindowEnd &&
     !userHasReportedNoShow
   );
+  const showNoShowSection = Boolean(latestNoShowReport || booking.status === 'CONFIRMED');
+  const noShowUnavailableReason = (() => {
+    if (userHasReportedNoShow) return 'Vous avez déjà envoyé un signalement pour cette réservation.';
+    if (booking.status !== 'CONFIRMED') return "Le signalement d'absence est disponible uniquement sur une réservation confirmée.";
+    if (meetingWindowEnd && new Date() <= meetingWindowEnd) {
+      return `Vous pourrez signaler une absence après la fin du créneau : ${meetingWindowEnd.toLocaleString('fr-FR')}.`;
+    }
+    return null;
+  })();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -536,7 +545,7 @@ const BookingDetailScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {(latestNoShowReport || canReportNoShow) && (
+        {showNoShowSection && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Absence et litige</Text>
 
@@ -593,12 +602,12 @@ const BookingDetailScreen = ({ navigation, route }) => {
 
                 <TouchableOpacity
                   style={styles.evidenceButton}
-                  onPress={pickEvidenceImage}
+                  onPress={takeEvidencePhoto}
                   disabled={uploadingEvidence}
                 >
-                  <Ionicons name="image-outline" size={18} color="#1A73E8" />
+                  <Ionicons name="camera-outline" size={18} color="#1A73E8" />
                   <Text style={styles.evidenceButtonText}>
-                    {uploadingEvidence ? 'Téléversement...' : evidencePhotoUrl ? 'Photo ajoutée' : 'Ajouter une photo preuve'}
+                    {uploadingEvidence ? 'Téléversement...' : evidencePhotoUrl ? 'Photo temps réel ajoutée' : 'Prendre une photo preuve'}
                   </Text>
                 </TouchableOpacity>
 
@@ -630,6 +639,20 @@ const BookingDetailScreen = ({ navigation, route }) => {
                 </View>
               </View>
             )}
+
+            {!latestNoShowReport && !showNoShowForm && noShowUnavailableReason && (
+              <View style={styles.disputeCard}>
+                <Text style={styles.disputeTitle}>Signaler une absence</Text>
+                <Text style={styles.disputeText}>{noShowUnavailableReason}</Text>
+              </View>
+            )}
+
+            {canReportNoShow && !showNoShowForm && !otherPartyReportedNoShow && (
+              <TouchableOpacity style={styles.outlineAction} onPress={() => setShowNoShowForm(true)}>
+                <Ionicons name="flag-outline" size={20} color="#64748B" />
+                <Text style={styles.outlineActionText}>Signaler une absence</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -649,14 +672,6 @@ const BookingDetailScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             )}
             
-            {canReportNoShow && !showNoShowForm && (
-              <TouchableOpacity style={styles.outlineAction} onPress={() => setShowNoShowForm(true)}>
-                <Ionicons name="flag-outline" size={20} color="#64748B" />
-                <Text style={styles.outlineActionText}>
-                  {otherPartyReportedNoShow ? 'Répondre au signalement' : 'Signaler une absence'}
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
 

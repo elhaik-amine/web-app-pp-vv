@@ -6,6 +6,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+
+const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
+const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
 
 const AvisScreen = ({ navigation, route }) => {
   const [rating, setRating] = useState(0);
@@ -15,6 +19,11 @@ const AvisScreen = ({ navigation, route }) => {
   const [booking, setBooking] = useState(null);
   const [existingReview, setExistingReview] = useState(null);
   const [userRole, setUserRole] = useState('');
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeDescription, setDisputeDescription] = useState('');
+  const [disputePhotoUrl, setDisputePhotoUrl] = useState('');
+  const [uploadingDisputePhoto, setUploadingDisputePhoto] = useState(false);
+  const [submittingDispute, setSubmittingDispute] = useState(false);
   
   const { bookingId } = route.params || {};
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -138,6 +147,97 @@ const AvisScreen = ({ navigation, route }) => {
       Alert.alert('Erreur', 'Impossible de publier l\'avis');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const uploadToCloudinary = async (uri) => {
+    const formData = new FormData();
+    const filename = uri.split('/').pop();
+    const ext = filename?.split('.').pop() || 'jpg';
+
+    formData.append('file', { uri, name: filename || `work-dispute.${ext}`, type: `image/${ext}` });
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+
+    const response = await fetch(CLOUDINARY_URL, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!data.secure_url) {
+      throw new Error(data.error?.message || 'Cloudinary upload failed');
+    }
+
+    return data.secure_url;
+  };
+
+  const takeDisputePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Autorisez l\'accès à la caméra pour prendre une preuve en temps réel.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        return;
+      }
+
+      setUploadingDisputePhoto(true);
+      const uploadedUrl = await uploadToCloudinary(result.assets[0].uri);
+      setDisputePhotoUrl(uploadedUrl);
+    } catch (error) {
+      Alert.alert('Erreur', error.message || 'Impossible de téléverser la preuve photo');
+    } finally {
+      setUploadingDisputePhoto(false);
+    }
+  };
+
+  const submitWorkDispute = async () => {
+    if (!disputeDescription.trim() || disputeDescription.trim().length < 10) {
+      Alert.alert('Description requise', 'Expliquez le problème en au moins 10 caractères.');
+      return;
+    }
+
+    if (!disputePhotoUrl) {
+      Alert.alert('Photo requise', 'Prenez une photo en temps réel du problème qui reste à corriger.');
+      return;
+    }
+
+    setSubmittingDispute(true);
+    try {
+      const token = await AsyncStorage.getItem('khidmati_token');
+
+      const response = await fetch(`${API_URL}/bookings/${bookingId}/report-work`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: disputeDescription.trim(),
+          evidence_photo_url: disputePhotoUrl,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        Alert.alert('Signalement envoyé', data.message || 'Votre litige a été transmis à l’administration.');
+        setShowDisputeForm(false);
+        setDisputeDescription('');
+        setDisputePhotoUrl('');
+      } else {
+        Alert.alert('Erreur', data.message || 'Impossible d’envoyer le signalement');
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible d’envoyer le signalement');
+    } finally {
+      setSubmittingDispute(false);
     }
   };
 
@@ -294,6 +394,74 @@ const AvisScreen = ({ navigation, route }) => {
             </View>
           </View>
 
+          <View style={styles.disputeBox}>
+            <View style={styles.disputeHeader}>
+              <Ionicons name="flag-outline" size={20} color="#B45309" />
+              <Text style={styles.disputeTitle}>La mission ne correspond pas à ce qui était convenu ?</Text>
+            </View>
+            <Text style={styles.disputeHint}>
+              Si le client n'est pas satisfait ou si le problème n'a pas été corrigé, il doit prendre une photo en temps réel du problème encore visible.
+            </Text>
+
+            {showDisputeForm ? (
+              <>
+                <TextInput
+                  style={styles.disputeTextArea}
+                  multiline
+                  value={disputeDescription}
+                  onChangeText={setDisputeDescription}
+                  placeholder="Ex: Le problème est encore visible, la réparation n'a pas tenu, ou le résultat ne correspond pas à ce qui était convenu..."
+                  textAlignVertical="top"
+                  placeholderTextColor="#94A3B8"
+                />
+
+                <TouchableOpacity
+                  style={styles.disputePhotoButton}
+                  onPress={takeDisputePhoto}
+                  disabled={uploadingDisputePhoto}
+                >
+                  <Ionicons name="camera-outline" size={18} color="#B45309" />
+                  <Text style={styles.disputePhotoButtonText}>
+                    {uploadingDisputePhoto ? 'Téléversement...' : disputePhotoUrl ? 'Photo du problème ajoutée' : 'Prendre une photo du problème non résolu'}
+                  </Text>
+                </TouchableOpacity>
+
+                {!!disputePhotoUrl && (
+                  <Image source={{ uri: disputePhotoUrl }} style={styles.disputePhotoPreview} />
+                )}
+
+                <View style={styles.disputeActions}>
+                  <TouchableOpacity
+                    style={styles.disputeSecondaryButton}
+                    onPress={() => {
+                      setShowDisputeForm(false);
+                      setDisputeDescription('');
+                      setDisputePhotoUrl('');
+                    }}
+                    disabled={submittingDispute || uploadingDisputePhoto}
+                  >
+                    <Text style={styles.disputeSecondaryText}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.disputePrimaryButton, (submittingDispute || uploadingDisputePhoto) && styles.publishButtonDisabled]}
+                    onPress={submitWorkDispute}
+                    disabled={submittingDispute || uploadingDisputePhoto}
+                  >
+                    {submittingDispute ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.disputePrimaryText}>Envoyer au admin</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity style={styles.disputeOpenButton} onPress={() => setShowDisputeForm(true)}>
+                <Text style={styles.disputeOpenText}>Signaler un problème</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <View style={styles.bottomSpacer} />
         </ScrollView>
 
@@ -343,6 +511,21 @@ const styles = StyleSheet.create({
   ratingLabel: { textAlign: 'center', fontSize: 16, fontWeight: '700', color: '#FFB300' },
   textAreaContainer: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 16 },
   textArea: { height: 120, fontSize: 16, color: '#191C23', lineHeight: 24 },
+  disputeBox: { backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 18, padding: 16, marginBottom: 24 },
+  disputeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  disputeTitle: { flex: 1, marginLeft: 8, fontSize: 15, fontWeight: '700', color: '#7C2D12' },
+  disputeHint: { fontSize: 13, color: '#9A3412', lineHeight: 19, marginBottom: 12 },
+  disputeTextArea: { minHeight: 110, borderWidth: 1, borderColor: '#FDBA74', borderRadius: 14, backgroundColor: '#FFFFFF', padding: 12, fontSize: 14, color: '#191C23', marginBottom: 12 },
+  disputePhotoButton: { height: 46, borderRadius: 14, borderWidth: 1, borderColor: '#FDBA74', backgroundColor: '#FFFBEB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  disputePhotoButtonText: { marginLeft: 8, color: '#B45309', fontSize: 14, fontWeight: '700' },
+  disputePhotoPreview: { width: '100%', height: 180, borderRadius: 14, marginBottom: 12, backgroundColor: '#FED7AA' },
+  disputeActions: { flexDirection: 'row', gap: 10 },
+  disputeSecondaryButton: { flex: 1, height: 46, borderRadius: 14, borderWidth: 1, borderColor: '#FED7AA', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  disputeSecondaryText: { color: '#9A3412', fontSize: 14, fontWeight: '700' },
+  disputePrimaryButton: { flex: 1, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F97316' },
+  disputePrimaryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  disputeOpenButton: { height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F97316' },
+  disputeOpenText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
   alreadyReviewedCard: { alignItems: 'center', padding: 32, backgroundColor: '#F8FAFC', borderRadius: 20 },
   alreadyReviewedTitle: { fontSize: 18, fontWeight: '700', color: '#191C23', marginTop: 16, marginBottom: 8 },
   alreadyReviewedText: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 20 },

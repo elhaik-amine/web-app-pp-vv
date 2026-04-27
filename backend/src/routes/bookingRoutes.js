@@ -20,6 +20,7 @@ const {
   uploadAfterImages,
   createReview,
   reportNoShow,
+  reportWorkQuality,
 } = require('../controllers/bookingController');
 const { protect, role, restricted } = require('../middlewares/authMiddleware');
 
@@ -76,6 +77,7 @@ router.post('/:id/after-images', protect, restricted, role('PROVIDER'), uploadAf
 router.patch('/:id/cancel',      protect, restricted,                   cancelBooking);
 router.post('/:id/review',        protect, restricted, role('CLIENT'),   createReview);
 router.post('/:id/report-noshow', protect, restricted,                   reportNoShow);
+router.post('/:id/report-work',   protect, restricted, role('CLIENT'),   reportWorkQuality);
 
 // POST /api/bookings/:id/photos
 // Save a photo URL (BEFORE by client, AFTER by provider) — max 3 per type

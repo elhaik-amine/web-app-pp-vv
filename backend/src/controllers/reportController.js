@@ -1,6 +1,13 @@
 const { pool } = require('../config/db');
 const { syncNoShowDisputes } = require('../utils/noShowDisputes');
 
+const toMysqlDateTime = (value) => {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 // POST /api/reports
 const createReport = async (req, res) => {
   try {
@@ -35,7 +42,7 @@ const createReport = async (req, res) => {
         evidence_photo_url || null,
         evidence_latitude || null,
         evidence_longitude || null,
-        evidence_captured_at || null,
+        toMysqlDateTime(evidence_captured_at),
       ]
     );
 

@@ -27,6 +27,14 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-barcode-scanner"]
+    "plugins": [
+      "expo-barcode-scanner",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Khdimati needs camera access so you can take real-time proof photos for disputes."
+        }
+      ]
+    ]
   }
 }

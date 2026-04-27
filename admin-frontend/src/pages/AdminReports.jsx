@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FiCheckCircle, FiClock, FiImage, FiShieldOff, FiXCircle } from 'react-icons/fi';
+import { FiCheckCircle, FiClock, FiImage, FiShieldOff, FiX, FiXCircle } from 'react-icons/fi';
 import './AdminReports.css';
 
 const STATUS_OPTIONS = ['all', 'pending_review', 'under_admin_review', 'auto_resolved', 'resolved', 'rejected'];
@@ -8,6 +8,8 @@ const AdminReports = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [suspendModal, setSuspendModal] = useState(null);
+  const [suspendDays, setSuspendDays] = useState('');
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -19,6 +21,9 @@ const AdminReports = () => {
     Authorization: `Bearer ${localStorage.getItem('khidmati_token')}`,
     'Content-Type': 'application/json',
   });
+
+  const formatDate = (date) => new Date(date).toLocaleDateString('fr-FR');
+  const formatDateTime = (date) => new Date(date).toLocaleString('fr-FR');
 
   const fetchReports = async () => {
     setLoading(true);
@@ -56,11 +61,13 @@ const AdminReports = () => {
 
   const resolveReport = async (report) => {
     const adminNotes = window.prompt('Notes admin pour cette résolution (optionnel) :', report.admin_notes || '');
+    if (adminNotes === null) return;
     await updateReport(report.id, 'RESOLVED', adminNotes || '');
   };
 
   const rejectReport = async (report) => {
     const adminNotes = window.prompt('Pourquoi rejeter ce signalement ?', report.admin_notes || '');
+    if (adminNotes === null) return;
     await updateReport(report.id, 'REJECTED', adminNotes || '');
   };
 
@@ -68,15 +75,26 @@ const AdminReports = () => {
     await updateReport(report.id, 'UNDER_ADMIN_REVIEW', report.admin_notes || 'Escaladé pour revue manuelle');
   };
 
-  const suspendUser = async (userId) => {
-    if (!window.confirm('Suspendre cet utilisateur ? Cette action reste réversible.')) return;
+  const openSuspendModal = (user) => {
+    if (!user?.id) return;
+    setSuspendDays('');
+    setSuspendModal(user);
+  };
+
+  const confirmSuspend = async () => {
+    if (!suspendModal?.id) return;
 
     try {
-      const res = await fetch(`${API_URL}/admin/users/${userId}/suspend`, {
+      const payload = suspendDays ? { days: Number(suspendDays) } : {};
+      const res = await fetch(`${API_URL}/admin/users/${suspendModal.id}/suspend`, {
         method: 'PATCH',
         headers: getHeaders(),
+        body: JSON.stringify(payload),
       });
+
       if (res.ok) {
+        setSuspendModal(null);
+        setSuspendDays('');
         fetchReports();
       }
     } catch (error) {
@@ -115,6 +133,19 @@ const AdminReports = () => {
     }
   };
 
+  const getBookingParty = (report, role) => {
+    const isClient = role === 'client';
+    const bookingParty = isClient ? report.booking?.client : report.booking?.provider;
+    const fallbackId = isClient ? report.client_id : report.provider_id;
+    const fallbackName = isClient ? report.client_name : report.provider_name;
+
+    return {
+      id: bookingParty?.id || fallbackId,
+      name: bookingParty?.name || fallbackName || (isClient ? 'Client' : 'Prestataire'),
+      role: isClient ? 'client' : 'prestataire',
+    };
+  };
+
   const renderPhotoStrip = (title, photos = []) => (
     <div className="case-photo-section">
       <div className="case-photo-title">
@@ -140,7 +171,7 @@ const AdminReports = () => {
       <header className="page-header reports-header">
         <div>
           <h1>Signalements</h1>
-          <p className="subtitle">Traitez les litiges d'absence avec preuves, délais et contexte de réservation.</p>
+          <p className="subtitle">Traitez les litiges avec preuves, délais et contexte de réservation.</p>
         </div>
         <div className="filter-tabs glass-card">
           {STATUS_OPTIONS.map((value) => (
@@ -174,7 +205,7 @@ const AdminReports = () => {
                   <div className="avatar">{report.reporter_name?.charAt(0) || 'R'}</div>
                   <div>
                     <h4>{report.reporter_name || 'Anonyme'}</h4>
-                    <span>{new Date(report.created_at).toLocaleString()}</span>
+                    <span>{formatDateTime(report.created_at)}</span>
                   </div>
                 </div>
                 <div className="badge-stack">
@@ -186,7 +217,7 @@ const AdminReports = () => {
               <div className="report-card-body">
                 <p className="report-meta">
                   Réservation <strong>#{report.booking_id || '-'}</strong>
-                  {report.date_meeting ? ` • ${new Date(report.date_meeting).toLocaleDateString()} • ${report.time_slot}` : ''}
+                  {report.date_meeting ? ` - ${formatDate(report.date_meeting)} - ${report.time_slot}` : ''}
                 </p>
                 <p className="reported-user">
                   Signalé : <strong>{report.reported_user_name || 'Utilisateur inconnu'}</strong>
@@ -196,7 +227,7 @@ const AdminReports = () => {
                 {report.booking && (
                   <div className="booking-case-box">
                     <div className="booking-case-header">
-                      <strong>RÃ©servation #{report.booking.id}</strong>
+                      <strong>Réservation #{report.booking.id}</strong>
                       <span>{report.booking.status}</span>
                     </div>
                     <div className="booking-case-grid">
@@ -206,10 +237,10 @@ const AdminReports = () => {
                       <strong>{report.booking.provider?.name || '-'}</strong>
                       <span>Prix</span>
                       <strong>{report.booking.agreed_price || report.booking.estimated_price || 0} MAD</strong>
-                      <span>CrÃ©neau</span>
+                      <span>Créneau</span>
                       <strong>
                         {report.booking.date_meeting
-                          ? `${new Date(report.booking.date_meeting).toLocaleDateString()} â€¢ ${report.booking.time_slot}`
+                          ? `${formatDate(report.booking.date_meeting)} - ${report.booking.time_slot}`
                           : '-'}
                       </strong>
                     </div>
@@ -222,7 +253,7 @@ const AdminReports = () => {
                 {report.response_deadline && (
                   <div className="info-chip">
                     <FiClock />
-                    <span>Réponse attendue avant {new Date(report.response_deadline).toLocaleString()}</span>
+                    <span>Réponse attendue avant {formatDateTime(report.response_deadline)}</span>
                   </div>
                 )}
 
@@ -241,7 +272,7 @@ const AdminReports = () => {
                 {report.booking && (
                   <div className="case-photos-wrapper">
                     {renderPhotoStrip('Photos avant client', report.booking.photos?.before)}
-                    {renderPhotoStrip('Photos aprÃ¨s prestataire', report.booking.photos?.after)}
+                    {renderPhotoStrip('Photos après prestataire', report.booking.photos?.after)}
                   </div>
                 )}
 
@@ -257,29 +288,90 @@ const AdminReports = () => {
               <div className="report-card-footer">
                 {['PENDING_REVIEW', 'UNDER_ADMIN_REVIEW', 'PENDING'].includes(report.status) && (
                   <>
-                    <button
-                      onClick={() => suspendUser(report.reported_user_id)}
-                      className="btn btn-outline btn-sm text-danger"
-                      title="Suspendre l'utilisateur signalé"
-                    >
-                      <FiShieldOff /> Suspendre
-                    </button>
-                    {report.status !== 'UNDER_ADMIN_REVIEW' && (
-                      <button onClick={() => markUnderReview(report)} className="btn btn-outline btn-sm">
-                        <FiClock /> Revue admin
-                      </button>
+                    {report.booking ? (
+                      <div className="moderation-group suspend-group">
+                        <span className="action-group-label">Suspendre</span>
+                        <button
+                          onClick={() => openSuspendModal(getBookingParty(report, 'client'))}
+                          className="btn btn-sm suspend-choice"
+                          title="Suspendre le client"
+                        >
+                          <FiShieldOff /> Le client
+                        </button>
+                        <button
+                          onClick={() => openSuspendModal(getBookingParty(report, 'provider'))}
+                          className="btn btn-sm suspend-choice"
+                          title="Suspendre le prestataire"
+                        >
+                          <FiShieldOff /> Le prestataire
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="moderation-group suspend-group">
+                        <span className="action-group-label">Suspendre</span>
+                        <button
+                          onClick={() => openSuspendModal({
+                            id: report.reported_user_id,
+                            name: report.reported_user_name || 'Utilisateur signalé',
+                            role: 'utilisateur signalé',
+                          })}
+                          className="btn btn-sm suspend-choice"
+                          title="Suspendre l'utilisateur signalé"
+                        >
+                          <FiShieldOff /> Utilisateur
+                        </button>
+                      </div>
                     )}
-                    <button onClick={() => rejectReport(report)} className="btn btn-outline btn-sm">
-                      <FiXCircle /> Rejeter
-                    </button>
-                    <button onClick={() => resolveReport(report)} className="btn btn-secondary btn-sm">
-                      <FiCheckCircle /> Résoudre
-                    </button>
+                    <div className="moderation-group decision-group">
+                      {report.status !== 'UNDER_ADMIN_REVIEW' && (
+                        <button onClick={() => markUnderReview(report)} className="btn btn-outline btn-sm">
+                          <FiClock /> Revue
+                        </button>
+                      )}
+                      <button onClick={() => rejectReport(report)} className="btn btn-outline btn-sm">
+                        <FiXCircle /> Rejeter
+                      </button>
+                      <button onClick={() => resolveReport(report)} className="btn btn-secondary btn-sm">
+                        <FiCheckCircle /> Résoudre
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {suspendModal && (
+        <div className="modal-overlay" onClick={() => setSuspendModal(null)}>
+          <div className="modal-box glass-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Suspendre {suspendModal.role}</h3>
+              <button className="modal-close" onClick={() => setSuspendModal(null)}><FiX /></button>
+            </div>
+            <p className="modal-subtitle">
+              Utilisateur : <strong>{suspendModal.name}</strong>. Choisissez le nombre de jours, ou laissez vide pour une suspension indéfinie.
+            </p>
+            <div className="modal-input-group">
+              <label>Nombre de jours</label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                placeholder="Ex: 7 (vide = indéfini)"
+                value={suspendDays}
+                onChange={(event) => setSuspendDays(event.target.value)}
+                className="input-field"
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-outline" onClick={() => setSuspendModal(null)}>Annuler</button>
+              <button className="btn btn-warning" onClick={confirmSuspend}>
+                {suspendDays ? `Suspendre ${suspendDays} jour(s)` : 'Suspendre indéfiniment'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
