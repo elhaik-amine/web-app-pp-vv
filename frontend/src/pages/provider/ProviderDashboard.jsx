@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,10 +27,13 @@ const ProviderDashboard = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('demandes');
   const [socket, setSocket] = useState(null);
+  const socketRef = useRef(null);
+  const acceptingBookingRef = useRef(null);
   const [stats, setStats] = useState({
     missions: 0,
-    rating: 0,
-    successRate: 98,
+    rating: null,
+    totalReviews: 0,
+    successRate: 0,
   });
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -42,6 +45,13 @@ const ProviderDashboard = ({ navigation }) => {
     fetchConfirmedBookings();
     fetchTokenBalance();
     initSocket();
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
   }, []);
 
   const initSocket = async () => {
@@ -69,7 +79,6 @@ const ProviderDashboard = ({ navigation }) => {
       newSocket.on('booking:confirmed', () => {
         fetchPendingBookings();
         fetchConfirmedBookings();
-        Alert.alert('Succès', `Une réservation a été confirmée !`);
       });
       
       newSocket.on('booking:price_updated', () => {
@@ -77,6 +86,7 @@ const ProviderDashboard = ({ navigation }) => {
         fetchConfirmedBookings();
       });
       
+      socketRef.current = newSocket;
       setSocket(newSocket);
     }
   };
@@ -94,10 +104,13 @@ const ProviderDashboard = ({ navigation }) => {
         });
         const data = await response.json();
         if (data.success) {
+          const totalReviews = Number(data.data.total_reviews || 0);
+          const rating = totalReviews > 0 ? Number(data.data.rating || 0) : null;
           setStats({
             missions: data.data.total_bookings || 0,
-            rating: data.data.rating || 0,
-            successRate: data.data.success_rate || 98,
+            rating,
+            totalReviews,
+            successRate: Number(data.data.success_rate || 0),
           });
         }
       }
@@ -155,10 +168,15 @@ const ProviderDashboard = ({ navigation }) => {
   };
 
   const acceptBooking = async (bookingId) => {
+    if (acceptingBookingRef.current === bookingId) {
+      return;
+    }
+
     if (tokenBalance < 1) {
       Alert.alert('Solde insuffisant', "Vous n'avez pas assez de tokens pour accepter une réservation. Veuillez recharger votre compte.");
       return;
     }
+    acceptingBookingRef.current = bookingId;
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
       const response = await fetch(`${API_URL}/bookings/${bookingId}/confirm`, {
@@ -178,6 +196,8 @@ const ProviderDashboard = ({ navigation }) => {
       }
     } catch (error) {
       console.log('Error accepting booking:', error);
+    } finally {
+      acceptingBookingRef.current = null;
     }
   };
 
@@ -197,7 +217,7 @@ const ProviderDashboard = ({ navigation }) => {
 
   const statsCards = [
     { id: '1', label: 'Missions', value: stats.missions.toString(), icon: 'briefcase' },
-    { id: '2', label: 'Note', value: `${stats.rating} ⭐`, icon: 'star' },
+    { id: '2', label: stats.totalReviews > 0 ? `${stats.totalReviews} avis` : 'Note', value: stats.rating === null ? '-' : `${stats.rating.toFixed(2)} ⭐`, icon: 'star' },
     { id: '3', label: 'Taux succès', value: `${stats.successRate}%`, icon: 'trending-up' },
   ];
 

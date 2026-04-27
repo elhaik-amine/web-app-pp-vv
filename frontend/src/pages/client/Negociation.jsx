@@ -27,6 +27,8 @@ const NegociationScreen = ({ navigation, route }) => {
   const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL.replace('/api', '');
   const scrollViewRef = useRef();
   const socketRef = useRef(null);
+  const acceptingRef = useRef(false);
+  const confirmedAlertShownRef = useRef(false);
 
   useEffect(() => {
     const init = async () => {
@@ -64,6 +66,8 @@ const NegociationScreen = ({ navigation, route }) => {
     });
 
     socket.on('booking:confirmed', ({ agreed_price }) => {
+      if (confirmedAlertShownRef.current) return;
+      confirmedAlertShownRef.current = true;
       Alert.alert('Succès', `Réservation confirmée avec le prix de ${agreed_price} MAD !`);
       navigation.goBack();
     });
@@ -177,12 +181,17 @@ const NegociationScreen = ({ navigation, route }) => {
   };
 
   const acceptOffer = async () => {
+    if (acceptingRef.current) {
+      return;
+    }
+
     const price = getLatestPrice();
     if (!price || price <= 0) {
       Alert.alert('Erreur', 'Aucune offre à accepter');
       return;
     }
 
+    acceptingRef.current = true;
     setAccepting(true);
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
@@ -198,6 +207,11 @@ const NegociationScreen = ({ navigation, route }) => {
       const data = await response.json();
       if (data.success) {
         if (data.data.bothAccepted) {
+          if (confirmedAlertShownRef.current) {
+            return;
+          }
+
+          confirmedAlertShownRef.current = true;
           Alert.alert('Succès', 'Prix accepté par les deux parties ! Réservation confirmée.');
           navigation.goBack();
         } else {
@@ -211,6 +225,7 @@ const NegociationScreen = ({ navigation, route }) => {
     } catch (error) {
       Alert.alert('Erreur', 'Impossible d\'accepter');
     } finally {
+      acceptingRef.current = false;
       setAccepting(false);
     }
   };

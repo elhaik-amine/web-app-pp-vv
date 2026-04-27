@@ -71,7 +71,11 @@ const loginClient = async (req, res) => {
     }
 
     if (user.status === 'SUSPENDED') {
-      return res.status(403).json({ success: false, message: 'Your account has been suspended' });
+      return res.status(403).json({ success: false, message: 'Your account has been suspended', status: user.status });
+    }
+
+    if (user.status === 'BANNED') {
+      return res.status(403).json({ success: false, message: 'Your account has been banned', status: user.status });
     }
 
     const accessToken = generateAccessToken(user.id);

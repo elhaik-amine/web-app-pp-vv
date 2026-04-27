@@ -14,6 +14,67 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
+const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
+
+const requireCloudinaryConfig = () => {
+  if (!CLOUDINARY_URL) throw new Error('EXPO_PUBLIC_CLOUDINARY_URL is missing');
+  if (!CLOUDINARY_PRESET) throw new Error('EXPO_PUBLIC_CLOUDINARY_PRESET is missing');
+};
+
+const getCloudinaryCloudName = () => {
+  const match = CLOUDINARY_URL?.match(/\/v1_1\/([^/]+)\//);
+  return match?.[1] || 'unknown';
+};
+
+const uploadToCloudinary = async (photo, index) => {
+  requireCloudinaryConfig();
+
+  if (!photo?.uri) {
+    throw new Error('Photo URI is missing');
+  }
+
+  const formData = new FormData();
+  formData.append('file', {
+    uri: photo.uri,
+    name: photo.fileName || `mission_after_${Date.now()}_${index + 1}.jpg`,
+    type: photo.mimeType || 'image/jpeg',
+  });
+  formData.append('upload_preset', CLOUDINARY_PRESET);
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.open('POST', CLOUDINARY_URL);
+    xhr.onload = () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        reject(new Error('Cloudinary returned an invalid response'));
+        return;
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300 && data.secure_url) {
+        console.log('Cloudinary after-photo upload ok:', {
+          cloudName: getCloudinaryCloudName(),
+          publicId: data.public_id,
+        });
+        resolve(data.secure_url);
+        return;
+      }
+
+      reject(new Error(data.error?.message || `Cloudinary upload failed (${xhr.status})`));
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Cloudinary upload network error'));
+    };
+
+    xhr.send(formData);
+  });
+};
+
 const EndMissionPhotosScreen = ({ navigation, route }) => {
   const [booking, setBooking] = useState(null);
   const [beforePhotos, setBeforePhotos] = useState([]);
@@ -90,7 +151,16 @@ const EndMissionPhotosScreen = ({ navigation, route }) => {
     });
 
     if (!result.canceled) {
-      const newPhotos = [...afterPhotos, result.assets[0].uri];
+      const asset = result.assets[0];
+      const newPhotos = [
+        ...afterPhotos,
+        {
+          id: `${Date.now()}_${afterPhotos.length}`,
+          uri: asset.uri,
+          fileName: asset.fileName || null,
+          mimeType: asset.mimeType || null,
+        },
+      ];
       setAfterPhotos(newPhotos);
       console.log('Photo taken, current afterPhotos:', newPhotos);
     }
@@ -101,7 +171,7 @@ const EndMissionPhotosScreen = ({ navigation, route }) => {
   };
 
   const uploadPhotos = async () => {
-    const validPhotos = afterPhotos.filter(p => p !== null && p !== undefined && p !== '');
+    const validPhotos = afterPhotos.filter(p => p?.uri);
 
     if (validPhotos.length < minPhotos) {
       Alert.alert('Erreur', `Veuillez prendre au moins ${minPhotos} photo après la mission`);
@@ -117,14 +187,19 @@ const EndMissionPhotosScreen = ({ navigation, route }) => {
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
       
-      // Send photos directly to after-images endpoint
+      const uploadedUrls = [];
+      for (let i = 0; i < validPhotos.length; i += 1) {
+        const photoUrl = await uploadToCloudinary(validPhotos[i], i);
+        uploadedUrls.push(photoUrl);
+      }
+
       const response = await fetch(`${API_URL}/bookings/${bookingId}/after-images`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ images: validPhotos }),
+        body: JSON.stringify({ images: uploadedUrls }),
       });
       
       const data = await response.json();
@@ -139,15 +214,15 @@ const EndMissionPhotosScreen = ({ navigation, route }) => {
         Alert.alert('Erreur', data.message);
       }
     } catch (error) {
-      console.log('Error:', error);
-      Alert.alert('Erreur', 'Impossible de terminer la mission');
+      console.log('Error uploading after photos:', error);
+      Alert.alert('Erreur', error.message || 'Impossible de terminer la mission');
     } finally {
       setSubmitting(false);
     }
   };
 
   const completeMission = () => {
-    const validPhotos = afterPhotos.filter(p => p !== null && p !== undefined && p !== '');
+    const validPhotos = afterPhotos.filter(p => p?.uri);
 
     if (validPhotos.length < minPhotos) {
       Alert.alert('Erreur', `Veuillez prendre au moins ${minPhotos} photo après la mission`);
@@ -178,7 +253,7 @@ const EndMissionPhotosScreen = ({ navigation, route }) => {
     );
   }
 
-  const completedPhotos = afterPhotos.filter(p => p && p !== '').length;
+  const completedPhotos = afterPhotos.filter(p => p?.uri).length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -223,8 +298,8 @@ const EndMissionPhotosScreen = ({ navigation, route }) => {
           </Text>
           <View style={styles.afterGrid}>
             {afterPhotos.map((photo, index) => (
-              <View key={`${photo}-${index}`} style={styles.afterPhotoItem}>
-                <Image source={{ uri: photo }} style={styles.photo} />
+              <View key={photo.id || `${photo.uri}-${index}`} style={styles.afterPhotoItem}>
+                <Image source={{ uri: photo.uri }} style={styles.photo} />
                 <TouchableOpacity style={styles.removeBadge} onPress={() => removeAfterPhoto(index)}>
                   <Ionicons name="close" size={14} color="#FFFFFF" />
                 </TouchableOpacity>

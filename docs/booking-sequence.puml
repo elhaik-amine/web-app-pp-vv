@@ -1,0 +1,74 @@
+@startuml
+title Simple Booking Process Sequence
+
+autonumber
+skinparam sequenceMessageAlign center
+
+actor Client
+participant "Client App" as ClientApp
+participant "Backend API" as API
+participant "Cloudinary" as Cloudinary
+participant "Provider App" as ProviderApp
+actor Provider
+
+Client -> ClientApp: Start reservation
+Client -> ClientApp: Add description and before photos
+
+loop Upload each before photo
+  ClientApp -> Cloudinary: Upload photo
+  Cloudinary --> ClientApp: Photo URL
+end
+
+Client -> ClientApp: See estimated price
+Client -> ClientApp: Choose available date and time slot
+Client -> ClientApp: Confirm reservation
+
+ClientApp -> API: Create booking request\n(description, photos, price, time slot)
+API -> ProviderApp: Notify provider\nnew booking request
+
+Provider -> ProviderApp: Review request
+
+alt Provider accepts offer
+  ProviderApp -> API: Accept booking
+  API -> API: Confirm booking\nand generate QR code
+  API -> ClientApp: Notify client\nbooking confirmed
+else Provider counters offer
+  ProviderApp -> API: Send counter price
+  API -> ClientApp: Notify client\ncounter offer
+  Client -> ClientApp: Accept counter offer
+  ClientApp -> API: Accept new price
+  API -> API: Confirm booking\nand generate QR code
+  API -> ProviderApp: Notify provider\nbooking confirmed
+  API -> ClientApp: Notify client\nbooking confirmed
+end
+
+Client -> ClientApp: Open QR code\nat reserved time
+ClientApp -> Client: Show QR code
+
+Provider -> ProviderApp: Scan client QR code
+ProviderApp -> API: Validate QR code
+API -> API: Update booking to IN_PROGRESS
+API -> ClientApp: Notify client\nservice started
+
+Provider -> ProviderApp: Finish the job
+Provider -> ProviderApp: Take after photos
+
+loop Upload each after photo
+  ProviderApp -> Cloudinary: Upload photo
+  Cloudinary --> ProviderApp: Photo URL
+end
+
+ProviderApp -> API: Complete booking\nwith after photo URLs
+API -> API: Update booking to COMPLETED
+API -> ClientApp: Notify client\nservice completed
+
+Client -> ClientApp: Leave review
+ClientApp -> API: Submit rating and comment
+
+alt Rating is high enough
+  API -> ProviderApp: Notify provider\nreview received and +0.5 token reward
+else Normal review
+  API -> ProviderApp: Notify provider\nreview received
+end
+
+@enduml

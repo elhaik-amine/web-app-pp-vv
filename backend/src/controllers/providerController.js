@@ -56,7 +56,48 @@ const getProviderById = async (req, res) => {
         .json({ success: false, message: "Provider not found" });
     }
 
-    res.json({ success: true, data: rows[0] });
+    const provider = rows[0];
+
+    const [[bookingStats]] = await pool.execute(
+      `SELECT
+         COUNT(*) AS total_requests,
+         SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_bookings,
+         SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_bookings,
+         SUM(CASE WHEN status IN ('CONFIRMED', 'IN_PROGRESS', 'COMPLETED') THEN 1 ELSE 0 END) AS accepted_bookings
+       FROM bookings
+       WHERE provider_id = ?`,
+      [req.params.id],
+    );
+
+    const [[reviewStats]] = await pool.execute(
+      `SELECT
+         COALESCE(AVG(rating), 0) AS average_rating,
+         COUNT(*) AS review_count
+       FROM reviews
+       WHERE provider_id = ?`,
+      [req.params.id],
+    );
+
+    const completedBookings = Number(bookingStats.completed_bookings || 0);
+    const cancelledBookings = Number(bookingStats.cancelled_bookings || 0);
+    const decidedBookings = completedBookings + cancelledBookings;
+    const successRate = decidedBookings > 0
+      ? Math.round((completedBookings / decidedBookings) * 100)
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        ...provider,
+        rating: Number(reviewStats.average_rating || 0),
+        total_reviews: Number(reviewStats.review_count || 0),
+        total_bookings: completedBookings,
+        total_requests: Number(bookingStats.total_requests || 0),
+        accepted_bookings: Number(bookingStats.accepted_bookings || 0),
+        cancelled_bookings: cancelledBookings,
+        success_rate: successRate,
+      },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

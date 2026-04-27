@@ -19,6 +19,8 @@ const {
   getBookingPhotos,
   uploadAfterImages,
   createReview,
+  reportNoShow,
+  reportWorkQuality,
 } = require('../controllers/bookingController');
 const { protect, role, restricted } = require('../middlewares/authMiddleware');
 
@@ -73,7 +75,9 @@ router.post('/:id/scan-qr',      protect, restricted, role('PROVIDER'), scanQR);
 router.patch('/:id/complete',    protect, restricted, role('PROVIDER'), completeBooking);
 router.post('/:id/after-images', protect, restricted, role('PROVIDER'), uploadAfterImages);
 router.patch('/:id/cancel',      protect, restricted,                   cancelBooking);
-router.post('/:id/review',       protect, restricted, role('CLIENT'),   createReview);
+router.post('/:id/review',        protect, restricted, role('CLIENT'),   createReview);
+router.post('/:id/report-noshow', protect, restricted,                   reportNoShow);
+router.post('/:id/report-work',   protect, restricted, role('CLIENT'),   reportWorkQuality);
 
 // POST /api/bookings/:id/photos
 // Save a photo URL (BEFORE by client, AFTER by provider) — max 3 per type
@@ -104,10 +108,38 @@ router.post('/:id/photos', protect, restricted, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Only the provider can add AFTER photos' });
     }
 
-    // Enforce max 3 photos per booking per type
+    const requestedSortOrder = Number(sort_order) || 1;
+
+    const [existingRows] = await pool.execute(
+      `SELECT id
+       FROM booking_photos
+       WHERE booking_id = ? AND type = ? AND uploaded_by = ? AND sort_order = ?
+       LIMIT 1`,
+      [bookingId, type, req.user.id, requestedSortOrder]
+    );
+
+    if (existingRows.length > 0) {
+      await pool.execute(
+        'UPDATE booking_photos SET url = ?, description = ? WHERE id = ?',
+        [url, description || null, existingRows[0].id]
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          id: existingRows[0].id,
+          booking_id: bookingId,
+          type,
+          url,
+          sort_order: requestedSortOrder,
+        },
+      });
+    }
+
+    // Enforce max 3 photos per booking per type for new rows only.
     const [[{ count }]] = await pool.execute(
-      'SELECT COUNT(*) AS count FROM booking_photos WHERE booking_id = ? AND type = ?',
-      [bookingId, type]
+      'SELECT COUNT(*) AS count FROM booking_photos WHERE booking_id = ? AND type = ? AND uploaded_by = ?',
+      [bookingId, type, req.user.id]
     );
     if (count >= 3) {
       return res.status(400).json({ success: false, message: `Maximum 3 ${type} photos allowed` });
@@ -115,12 +147,12 @@ router.post('/:id/photos', protect, restricted, async (req, res) => {
 
     const [result] = await pool.execute(
       'INSERT INTO booking_photos (booking_id, uploaded_by, type, url, description, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-      [bookingId, req.user.id, type, url, description || null, sort_order || count + 1]
+      [bookingId, req.user.id, type, url, description || null, requestedSortOrder || count + 1]
     );
 
     res.status(201).json({
       success: true,
-      data: { id: result.insertId, booking_id: bookingId, type, url, sort_order: sort_order || count + 1 },
+      data: { id: result.insertId, booking_id: bookingId, type, url, sort_order: requestedSortOrder || count + 1 },
     });
   } catch (error) {
     console.error('Photo upload error:', error);
