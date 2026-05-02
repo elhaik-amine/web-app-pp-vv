@@ -11,10 +11,13 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthContext } from "../../context/AuthContext";
+
+const appLogo = require("../../../public/logo.png");
 
 const LoginScreen = ({ navigation }) => {
   const { setUserRole } = useContext(AuthContext);
@@ -116,7 +119,7 @@ const LoginScreen = ({ navigation }) => {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-              <Text style={styles.logoIcon}>🏠</Text>
+              <Image source={appLogo} style={styles.logoImage} />
             </View>
             <Text style={styles.appName}>Khdimati</Text>
             <Text style={styles.greeting}>Bon retour 👋</Text>
@@ -238,13 +241,18 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 64,
     height: 64,
-    backgroundColor: "#1A73E8",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
   },
-  logoIcon: { fontSize: 32 },
+  logoImage: { width: 52, height: 52, resizeMode: "contain" },
   appName: {
     fontSize: 28,
     fontWeight: "800",

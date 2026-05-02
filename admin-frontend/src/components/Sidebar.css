@@ -18,15 +18,22 @@
   border-bottom: 1px solid var(--border);
 }
 
-.shield-bg {
+.sidebar-logo-bg {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, var(--danger), var(--danger-hover));
+  background: #ffffff;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.sidebar-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .sidebar-header h2 {

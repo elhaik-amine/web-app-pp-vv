@@ -182,8 +182,35 @@ router.post('/:id/offer', protect, restricted, async (req, res) => {
       }
     }
 
-    if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
+    if (booking.status !== 'PENDING') {
       return res.status(400).json({ success: false, message: 'Cannot negotiate on this booking' });
+    }
+
+    const [negotiationStats] = await pool.execute(
+      'SELECT COUNT(*) as count FROM messages WHERE booking_id = ? AND is_negotiation = 1',
+      [bookingId]
+    );
+
+    const counterCount = Number(negotiationStats[0]?.count || 0);
+    if (counterCount >= 3) {
+      return res.status(400).json({ success: false, message: 'La limite de 3 contre-offres est atteinte' });
+    }
+
+    const [latestOffers] = await pool.execute(
+      `SELECT sender_id
+       FROM messages
+       WHERE booking_id = ? AND is_negotiation = 1
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [bookingId]
+    );
+
+    if (latestOffers.length === 0 && req.user.id !== booking.provider_id) {
+      return res.status(403).json({ success: false, message: 'Le prestataire doit faire la premiere contre-offre' });
+    }
+
+    if (latestOffers.length > 0 && Number(latestOffers[0].sender_id) === Number(req.user.id)) {
+      return res.status(400).json({ success: false, message: "C'est au tour de l'autre partie de repondre" });
     }
 
     const [roundsCount] = await pool.execute(
@@ -200,8 +227,10 @@ router.post('/:id/offer', protect, restricted, async (req, res) => {
       [bookingId, req.user.id, `Proposition: ${proposed_price} MAD`, 1, proposed_price]
     );
 
-    await pool.execute('UPDATE bookings SET estimated_price = ?, agreed_price = ? WHERE id = ?', 
-      [proposed_price, proposed_price, bookingId]);
+    await pool.execute('DELETE FROM price_acceptances WHERE booking_id = ?', [bookingId]);
+
+    await pool.execute('UPDATE bookings SET estimated_price = ?, agreed_price = NULL WHERE id = ?',
+      [proposed_price, bookingId]);
 
     const [msgRows] = await pool.execute(
       `SELECT m.id, m.content, m.created_at, m.is_negotiation, m.proposed_price,

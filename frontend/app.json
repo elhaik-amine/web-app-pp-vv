@@ -4,12 +4,12 @@
     "slug": "khidmati",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./public/logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "khidmati",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./public/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -18,14 +18,14 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./public/logo.png",
         "backgroundColor": "#ffffff"
       },
       "usesCleartextTraffic": true,
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./public/logo.png"
     },
     "plugins": [
       "expo-barcode-scanner",

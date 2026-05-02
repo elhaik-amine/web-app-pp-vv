@@ -17,6 +17,8 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 
+const appLogo = require("../../../public/logo.png");
+
 const MOROCCAN_CITIES = [
   "Casablanca",
   "Rabat",
@@ -282,7 +284,7 @@ const RegisterScreen = ({ navigation }) => {
         >
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-              <Text style={styles.logoIcon}>🏠</Text>
+              <Image source={appLogo} style={styles.logoImage} />
             </View>
             <Text style={styles.title}>Creer un compte</Text>
             <Text style={styles.subtitle}>
@@ -590,15 +592,18 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 64,
     height: 64,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
   },
-  logoIcon: {
-    fontSize: 32,
-  },
+  logoImage: { width: 52, height: 52, resizeMode: "contain" },
   title: {
     fontSize: 28,
     fontWeight: "800",

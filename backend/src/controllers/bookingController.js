@@ -258,7 +258,7 @@ const confirmBooking = async (req, res) => {
     qrActiveUntil.setHours(startHour + 3, 0, 0, 0);
 
     await pool.execute(
-      "UPDATE bookings SET status = 'CONFIRMED', qr_code = ?, qr_active_from = ?, qr_active_until = ? WHERE id = ?",
+      "UPDATE bookings SET status = 'CONFIRMED', agreed_price = estimated_price, qr_code = ?, qr_active_from = ?, qr_active_until = ? WHERE id = ?",
       [qrCode, qrActiveFrom, qrActiveUntil, booking.id]
     );
 
@@ -305,12 +305,48 @@ const acceptPrice = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
+    if (booking.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: `Cannot accept a price on a booking with status: ${booking.status}` });
+    }
+
+    const currentPrice = Number(booking.estimated_price || booking.agreed_price || 0);
+    if (Number(price) !== currentPrice) {
+      return res.status(400).json({ success: false, message: 'You can only accept the current offer price' });
+    }
+
+    const [latestOffers] = await pool.execute(
+      `SELECT sender_id
+       FROM messages
+       WHERE booking_id = ? AND is_negotiation = 1
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [bookingId]
+    );
+
+    let proposerId = booking.client_id;
+    if (latestOffers.length === 0) {
+      if (req.user.id !== booking.provider_id) {
+        return res.status(403).json({ success: false, message: 'Le prestataire doit accepter ou contrer le prix initial' });
+      }
+    } else {
+      proposerId = latestOffers[0].sender_id;
+      if (Number(proposerId) === Number(req.user.id)) {
+        return res.status(400).json({ success: false, message: 'Vous ne pouvez pas accepter votre propre offre' });
+      }
+    }
+
     if (req.user.id === booking.provider_id) {
       const [providerRows] = await pool.execute('SELECT token_balance FROM users WHERE id = ?', [booking.provider_id]);
       if (Number(providerRows[0].token_balance) < TOKEN_COST_PER_BOOKING) {
         return res.status(400).json({ success: false, message: "Vous n'avez pas assez de tokens pour accepter un prix." });
       }
     }
+
+    await pool.execute('DELETE FROM price_acceptances WHERE booking_id = ?', [bookingId]);
+    await pool.execute(
+      'INSERT INTO price_acceptances (booking_id, user_id, price) VALUES (?, ?, ?)',
+      [bookingId, proposerId, price]
+    );
 
     const [existing] = await pool.execute(
       'SELECT * FROM price_acceptances WHERE booking_id = ? AND user_id = ?',
@@ -327,8 +363,8 @@ const acceptPrice = async (req, res) => {
     );
 
     const [acceptances] = await pool.execute(
-      'SELECT * FROM price_acceptances WHERE booking_id = ?',
-      [bookingId]
+      'SELECT * FROM price_acceptances WHERE booking_id = ? AND price = ?',
+      [bookingId, price]
     );
 
     const bothAccepted = acceptances.length === 2;
@@ -423,6 +459,19 @@ const rejectPrice = async (req, res) => {
 
     if (booking.client_id !== req.user.id && booking.provider_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const [latestOffers] = await pool.execute(
+      `SELECT sender_id
+       FROM messages
+       WHERE booking_id = ? AND is_negotiation = 1
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [bookingId]
+    );
+
+    if (latestOffers.length === 0 || Number(latestOffers[0].sender_id) === Number(req.user.id)) {
+      return res.status(400).json({ success: false, message: "Aucune offre adverse a refuser" });
     }
 
     await pool.execute('DELETE FROM price_acceptances WHERE booking_id = ?', [bookingId]);
