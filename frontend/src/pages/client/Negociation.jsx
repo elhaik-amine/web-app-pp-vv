@@ -20,7 +20,7 @@ const NegociationScreen = ({ navigation, route }) => {
   const [userId, setUserId] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [offerPrice, setOfferPrice] = useState('');
-  const [myRounds, setMyRounds] = useState(0);
+  const [counterCount, setCounterCount] = useState(0);
 
   const { bookingId } = route.params || {};
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -29,12 +29,13 @@ const NegociationScreen = ({ navigation, route }) => {
   const socketRef = useRef(null);
   const acceptingRef = useRef(false);
   const confirmedAlertShownRef = useRef(false);
+  const userRoleRef = useRef('');
 
   useEffect(() => {
     const init = async () => {
       await loadUserData();
       if (bookingId) {
-        await Promise.all([fetchMessages(), fetchBookingDetails(), fetchMyRounds()]);
+        await Promise.all([fetchMessages(), fetchBookingDetails(), fetchCounterCount()]);
       }
       setLoading(false);
     };
@@ -61,7 +62,7 @@ const NegociationScreen = ({ navigation, route }) => {
     socket.on('negotiation:new', (message) => {
       setMessages(prev => [...prev, message]);
       fetchBookingDetails();
-      fetchMyRounds();
+      fetchCounterCount();
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     });
 
@@ -69,7 +70,7 @@ const NegociationScreen = ({ navigation, route }) => {
       if (confirmedAlertShownRef.current) return;
       confirmedAlertShownRef.current = true;
       Alert.alert('Succès', `Réservation confirmée avec le prix de ${agreed_price} MAD !`);
-      navigation.goBack();
+      redirectAfterConfirmation();
     });
 
     return () => {
@@ -84,6 +85,7 @@ const NegociationScreen = ({ navigation, route }) => {
       if (userData) {
         const user = JSON.parse(userData);
         setUserRole(user.role);
+        userRoleRef.current = user.role;
         setUserId(user.id);
       }
     } catch (error) {
@@ -116,13 +118,17 @@ const NegociationScreen = ({ navigation, route }) => {
       const data = await response.json();
       if (data.success) {
         setBooking(data.data);
+        if (data.data?.status === 'CONFIRMED' && !confirmedAlertShownRef.current) {
+          confirmedAlertShownRef.current = true;
+          redirectAfterConfirmation();
+        }
       }
     } catch (error) {
       console.log('Error:', error);
     }
   };
 
-  const fetchMyRounds = async () => {
+  const fetchCounterCount = async () => {
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
       const response = await fetch(`${API_URL}/bookings/${bookingId}/messages`, {
@@ -130,20 +136,48 @@ const NegociationScreen = ({ navigation, route }) => {
       });
       const data = await response.json();
       if (data.success) {
-        const myOffers = data.data.filter(m => m.is_negotiation && Number(m.sender_id) === Number(userId));
-        setMyRounds(myOffers.length);
+        const counters = data.data.filter(m => m.is_negotiation);
+        setCounterCount(counters.length);
       }
     } catch (error) {
       console.log('Error:', error);
     }
   };
 
+  const getLatestNegotiation = () => {
+    const negotiations = messages.filter(m => m.is_negotiation);
+    return negotiations.length > 0 ? negotiations[negotiations.length - 1] : null;
+  };
+
+  const isMyTurnToCounter = () => {
+    const latestNegotiation = getLatestNegotiation();
+    if (!latestNegotiation) return userRole === 'PROVIDER';
+    return Number(latestNegotiation.sender_id) !== Number(userId);
+  };
+
+  const canAcceptCurrentPrice = () => {
+    const latestNegotiation = getLatestNegotiation();
+    if (!latestNegotiation) return userRole === 'PROVIDER';
+    return Number(latestNegotiation.sender_id) !== Number(userId);
+  };
+
+  const redirectAfterConfirmation = () => {
+    const role = userRoleRef.current || userRole;
+    const target = role === 'PROVIDER' ? 'QRScanner' : 'QRCodeDisplay';
+    navigation.replace(target, { bookingId });
+  };
+
   const sendNegotiation = async (price) => {
-    if (myRounds >= 3) {
+    if (counterCount >= 3) {
       Alert.alert('Limite', 'Vous avez utilisé vos 3 rounds');
       return;
     }
     
+    if (!isMyTurnToCounter()) {
+      Alert.alert('Patientez', "C'est au tour de l'autre partie de repondre");
+      return;
+    }
+
     setSendingOffer(true);
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
@@ -185,6 +219,11 @@ const NegociationScreen = ({ navigation, route }) => {
       return;
     }
 
+    if (!isMyTurnToCounter()) {
+      Alert.alert('Patientez', "C'est au tour de l'autre partie de repondre");
+      return;
+    }
+
     const price = getLatestPrice();
     if (!price || price <= 0) {
       Alert.alert('Erreur', 'Aucune offre à accepter');
@@ -213,7 +252,7 @@ const NegociationScreen = ({ navigation, route }) => {
 
           confirmedAlertShownRef.current = true;
           Alert.alert('Succès', 'Prix accepté par les deux parties ! Réservation confirmée.');
-          navigation.goBack();
+          redirectAfterConfirmation();
         } else {
           Alert.alert('Succès', 'Prix accepté. En attente de l\'acceptation de l\'autre partie.');
           fetchMessages();
@@ -273,7 +312,9 @@ const NegociationScreen = ({ navigation, route }) => {
   }
 
   const currentPrice = getLatestPrice();
-  const roundsLeft = 3 - myRounds;
+  const roundsLeft = 3 - counterCount;
+  const canCounter = booking?.status === 'PENDING' && roundsLeft > 0 && isMyTurnToCounter();
+  const canAccept = booking?.status === 'PENDING' && canAcceptCurrentPrice();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -333,23 +374,26 @@ const NegociationScreen = ({ navigation, route }) => {
         <View style={styles.roundCounterContainer}>
           <View style={styles.roundCounter}>
             <Ionicons name="alert-circle" size={16} color={roundsLeft === 0 ? "#EF4444" : "#F97316"} />
-            <Text style={styles.roundCounterText}>Vos rounds: {myRounds}/3 ({roundsLeft} restants)</Text>
+            <Text style={styles.roundCounterText}>Contre-offres: {counterCount}/3 ({Math.max(roundsLeft, 0)} restantes)</Text>
           </View>
+          <Text style={styles.turnText}>
+            {canCounter ? 'Vous pouvez proposer une contre-offre.' : "En attente de la reponse de l'autre partie."}
+          </Text>
         </View>
       </ScrollView>
 
       <View style={styles.actionSection}>
         <Text style={styles.actionLabel}>Votre réponse:</Text>
         <View style={styles.buttonGrid}>
-          <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={acceptOffer} disabled={accepting}>
+          <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn, !canAccept && styles.buttonDisabled]} onPress={acceptOffer} disabled={accepting || !canAccept}>
             {accepting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.acceptBtnText}>Accepter {currentPrice} MAD ✓</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionBtn, styles.offerBtn, roundsLeft === 0 && styles.buttonDisabled]} onPress={() => setModalVisible(true)} disabled={roundsLeft === 0}>
-            <Text style={styles.offerBtnText}>Faire une offre ({roundsLeft})</Text>
+          <TouchableOpacity style={[styles.actionBtn, styles.offerBtn, !canCounter && styles.buttonDisabled]} onPress={() => setModalVisible(true)} disabled={!canCounter}>
+            <Text style={styles.offerBtnText}>Contre-offre ({Math.max(roundsLeft, 0)})</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionBtn, styles.refuseBtn]} onPress={rejectPriceOffer} disabled={rejecting}>
+          <TouchableOpacity style={[styles.actionBtn, styles.refuseBtn, !canAccept && styles.buttonDisabled]} onPress={rejectPriceOffer} disabled={rejecting || !canAccept}>
             {rejecting ? <ActivityIndicator size="small" color="#EF4444" /> : <Text style={styles.refuseBtnText}>Refuser ✗</Text>}
           </TouchableOpacity>
 
@@ -415,6 +459,7 @@ const styles = StyleSheet.create({
   roundCounterContainer: { alignItems: 'center', marginBottom: 32 },
   roundCounter: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7ED', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   roundCounterText: { color: '#F97316', fontSize: 12, fontWeight: '700', marginLeft: 6 },
+  turnText: { marginTop: 8, fontSize: 12, fontWeight: '600', color: '#64748B', textAlign: 'center' },
   actionSection: { padding: 24, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   actionLabel: { fontSize: 14, fontWeight: '700', color: '#191C23', marginBottom: 16 },
   buttonGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },

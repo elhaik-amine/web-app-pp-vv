@@ -191,6 +191,7 @@ const ProviderDashboard = ({ navigation }) => {
         Alert.alert('Succès', 'Réservation acceptée');
         fetchPendingBookings();
         fetchConfirmedBookings();
+        navigation.navigate('QRScanner', { bookingId });
       } else {
         Alert.alert('Erreur', data.message);
       }
