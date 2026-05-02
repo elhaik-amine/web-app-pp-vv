@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { FiGrid, FiAlertCircle, FiUsers, FiLogOut, FiShield } from 'react-icons/fi';
+import { FiGrid, FiAlertCircle, FiUsers, FiLogOut } from 'react-icons/fi';
 import './Sidebar.css';
 
 const Sidebar = () => {
@@ -14,8 +14,8 @@ const Sidebar = () => {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="shield-bg">
-          <FiShield size={24} color="#FFFFFF" />
+        <div className="sidebar-logo-bg">
+          <img src="/logo.png" alt="Khdimati logo" className="sidebar-logo" />
         </div>
         <h2>Admin Panel</h2>
       </div>

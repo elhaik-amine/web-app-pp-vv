@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiMail, FiLock, FiShield } from 'react-icons/fi';
+import { FiMail, FiLock } from 'react-icons/fi';
 import './Login.css';
 
 const Login = () => {
@@ -46,8 +46,8 @@ const Login = () => {
     <div className="login-container">
       <div className="login-card glass-card animate-fade-in">
         <div className="login-header">
-          <div className="shield-bg">
-            <FiShield size={32} color="#FFFFFF" />
+          <div className="login-logo-bg">
+            <img src="/logo.png" alt="Khdimati logo" className="login-logo" />
           </div>
           <h1>Admin Portal</h1>
           <p>Sign in to manage the platform</p>

@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Animated, StatusBar, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const appLogo = require("../../../public/logo.png");
 
 const SplashScreen = ({ navigation }) => {
   const dot1 = new Animated.Value(0);
@@ -43,7 +45,7 @@ const SplashScreen = ({ navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor="#1A73E8" />
       <View style={styles.centerContent}>
         <View style={styles.logoSquare}>
-          <Text style={styles.houseIcon}>🏠</Text>
+          <Image source={appLogo} style={styles.logoImage} />
         </View>
         <Text style={styles.appName}>Khdimati</Text>
         <Text style={styles.tagline}>Votre maison entre de bonnes mains</Text>
@@ -78,7 +80,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     elevation: 5,
   },
-  houseIcon: { fontSize: 40 },
+  logoImage: { width: 64, height: 64, resizeMode: 'contain' },
   appName: {
     fontSize: 32,
     fontWeight: '800',

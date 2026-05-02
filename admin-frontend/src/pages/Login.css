@@ -18,11 +18,23 @@
   margin-bottom: 32px;
 }
 
-.login-header .shield-bg {
+.login-logo-bg {
   width: 64px;
   height: 64px;
   margin: 0 auto 16px;
   border-radius: 16px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.login-logo {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
 }
 
 .login-header h1 {
