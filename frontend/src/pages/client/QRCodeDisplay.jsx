@@ -129,7 +129,8 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
   const formatActiveTime = () => {
     const from = new Date(booking.qr_active_from);
     const until = new Date(booking.qr_active_until);
-    return `${from.toLocaleTimeString()} - ${until.toLocaleTimeString()}`;
+    const timeOptions = { hour: '2-digit', minute: '2-digit' };
+    return `${from.toLocaleTimeString([], timeOptions)} - ${until.toLocaleTimeString([], timeOptions)}`;
   };
 
   return (

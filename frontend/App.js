@@ -8,6 +8,7 @@ import { AuthProvider, AuthContext } from './src/context/AuthContext';
 
 // Auth
 import OnboardingScreen from './src/pages/auth/Onboarding';
+import SplashScreen from './src/pages/auth/SplashScreen';
 import LoginScreen from './src/pages/auth/Login';
 import RegisterScreen from './src/pages/auth/Register';
 import ForgotPasswordScreen from './src/pages/auth/ForgotPassword';
@@ -86,7 +87,8 @@ function ProviderTabs() {
 
 function AuthNavigator() {
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
+    <AuthStack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
+      <AuthStack.Screen name="Splash" component={SplashScreen} />
       <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
@@ -164,6 +166,7 @@ function AppNavigator() {
       <RootStack.Screen name="Login" component={LoginScreen} />
       <RootStack.Screen name="Register" component={RegisterScreen} />
       <RootStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <RootStack.Screen name="Splash" component={SplashScreen} />
       <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
     </RootStack.Navigator>
   );

@@ -42,6 +42,21 @@ const getBooking = async (id) => {
   return rows[0] || null;
 };
 
+const getQrWindow = (dateMeeting, timeSlot) => {
+  const bookingDate = new Date(dateMeeting);
+  const [startTime, endTime] = String(timeSlot || '').split('-');
+  const [startHour = 8, startMinute = 0] = String(startTime || '08:00').split(':').map(Number);
+  const [endHour = startHour + 3, endMinute = 0] = String(endTime || '').split(':').map(Number);
+
+  const qrActiveFrom = new Date(bookingDate);
+  qrActiveFrom.setHours(startHour, startMinute || 0, 0, 0);
+
+  const qrActiveUntil = new Date(bookingDate);
+  qrActiveUntil.setHours(endHour, endMinute || 0, 0, 0);
+
+  return { qrActiveFrom, qrActiveUntil };
+};
+
 // ─── GET /api/bookings/slots ───────────────────────────────────────────────
 const getAvailableSlots = async (req, res) => {
   try {
@@ -243,19 +258,7 @@ const confirmBooking = async (req, res) => {
     const crypto = require('crypto');
     const qrCode = crypto.randomBytes(32).toString('hex');
     
-    // Set QR activation time based on booking date and time slot
-    const bookingDate = new Date(booking.date_meeting);
-    const timeSlot = booking.time_slot;
-    let startHour = 8;
-    if (timeSlot === '12:00-15:00') startHour = 12;
-    else if (timeSlot === '15:00-18:00') startHour = 15;
-    else if (timeSlot === '18:00-21:00') startHour = 18;
-    
-    const qrActiveFrom = new Date(bookingDate);
-    qrActiveFrom.setHours(startHour, 0, 0, 0);
-    
-    const qrActiveUntil = new Date(bookingDate);
-    qrActiveUntil.setHours(startHour + 3, 0, 0, 0);
+    const { qrActiveFrom, qrActiveUntil } = getQrWindow(booking.date_meeting, booking.time_slot);
 
     await pool.execute(
       "UPDATE bookings SET status = 'CONFIRMED', agreed_price = estimated_price, qr_code = ?, qr_active_from = ?, qr_active_until = ? WHERE id = ?",
@@ -381,18 +384,7 @@ const acceptPrice = async (req, res) => {
       const crypto = require('crypto');
       const qrCode = crypto.randomBytes(32).toString('hex');
       
-      const bookingDate = new Date(booking.date_meeting);
-      const timeSlot = booking.time_slot;
-      let startHour = 8;
-      if (timeSlot === '12:00-15:00') startHour = 12;
-      else if (timeSlot === '15:00-18:00') startHour = 15;
-      else if (timeSlot === '18:00-21:00') startHour = 18;
-      
-      const qrActiveFrom = new Date(bookingDate);
-      qrActiveFrom.setHours(startHour, 0, 0, 0);
-      
-      const qrActiveUntil = new Date(bookingDate);
-      qrActiveUntil.setHours(startHour + 3, 0, 0, 0);
+      const { qrActiveFrom, qrActiveUntil } = getQrWindow(booking.date_meeting, booking.time_slot);
 
       await pool.execute(
         "UPDATE bookings SET status = 'CONFIRMED', agreed_price = ?, estimated_price = ?, qr_code = ?, qr_active_from = ?, qr_active_until = ? WHERE id = ?",

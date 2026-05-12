@@ -188,10 +188,10 @@ const ProviderDashboard = ({ navigation }) => {
       });
       const data = await response.json();
       if (data.success) {
-        Alert.alert('Succès', 'Réservation acceptée');
         fetchPendingBookings();
         fetchConfirmedBookings();
-        navigation.navigate('QRScanner', { bookingId });
+        setActiveTab('missions');
+        Alert.alert('Succès', 'Réservation acceptée');
       } else {
         Alert.alert('Erreur', data.message);
       }
