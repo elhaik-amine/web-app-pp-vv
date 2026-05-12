@@ -1,13 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const appLogo = require("../../../public/logo.png");
 
 const SplashScreen = ({ navigation }) => {
-  const dot1 = new Animated.Value(0);
-  const dot2 = new Animated.Value(0);
-  const dot3 = new Animated.Value(0);
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Animate the dots
@@ -24,21 +24,16 @@ const SplashScreen = ({ navigation }) => {
     animate(dot2, 200);
     animate(dot3, 400);
 
-    // Clear all data and navigate
-    const clearAndNavigate = async () => {
-      // Clear all data
-      await AsyncStorage.removeItem('khidmati_token');
-      await AsyncStorage.removeItem('khidmati_user');
-      await AsyncStorage.removeItem('onboarding_completed');
-      
-      // Wait 2 seconds for animation
+    const navigateNext = async () => {
+      const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
+
       setTimeout(() => {
-        navigation.replace('Onboarding');
+        navigation.replace(onboardingCompleted === 'true' ? 'Login' : 'Onboarding');
       }, 2500);
     };
     
-    clearAndNavigate();
-  }, []);
+    navigateNext();
+  }, [dot1, dot2, dot3, navigation]);
 
   return (
     <View style={styles.container}>

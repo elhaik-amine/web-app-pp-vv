@@ -163,8 +163,9 @@ const NegociationScreen = ({ navigation, route }) => {
 
   const redirectAfterConfirmation = () => {
     const role = userRoleRef.current || userRole;
-    const target = role === 'PROVIDER' ? 'QRScanner' : 'QRCodeDisplay';
-    navigation.replace(target, { bookingId });
+    const target = role === 'PROVIDER' ? 'ProviderTabs' : 'ClientTabs';
+    const screen = role === 'PROVIDER' ? 'ProviderDashboard' : 'HomeClient';
+    navigation.replace(target, { screen });
   };
 
   const sendNegotiation = async (price) => {
@@ -362,8 +363,12 @@ const NegociationScreen = ({ navigation, route }) => {
                 <View key={msg.id} style={[styles.messageWrapper, isMine ? styles.clientWrapper : styles.providerWrapper]}>
                   {!isMine && <Text style={styles.senderLabel}>{msg.sender_name}</Text>}
                   <View style={[styles.bubble, isMine ? styles.clientBubble : styles.providerBubble]}>
-                    <Text style={styles.messageText}>Offre: {Number(msg.proposed_price)} MAD</Text>
-                    <Text style={styles.timestamp}>{formatTime(msg.created_at)}</Text>
+                    <Text style={[styles.messageText, isMine ? styles.clientMessageText : styles.providerMessageText]}>
+                      Offre: {Number(msg.proposed_price)} MAD
+                    </Text>
+                    <Text style={[styles.timestamp, isMine ? styles.clientTimestamp : styles.providerTimestamp]}>
+                      {formatTime(msg.created_at)}
+                    </Text>
                   </View>
                 </View>
               );
@@ -453,9 +458,13 @@ const styles = StyleSheet.create({
   senderLabel: { fontSize: 12, color: '#94A3B8', marginBottom: 4, marginLeft: 4 },
   bubble: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20 },
   clientBubble: { backgroundColor: '#1A73E8', borderBottomRightRadius: 4 },
-  providerBubble: { backgroundColor: '#F1F5F9', borderBottomLeftRadius: 4 },
-  messageText: { fontSize: 15, marginBottom: 4, color: '#FFF' },
-  timestamp: { fontSize: 10, textAlign: 'right', color: 'rgba(255,255,255,0.7)' },
+  providerBubble: { backgroundColor: '#EAF2FF', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#D0E4FF' },
+  messageText: { fontSize: 15, marginBottom: 4, fontWeight: '700' },
+  clientMessageText: { color: '#FFFFFF' },
+  providerMessageText: { color: '#191C23' },
+  timestamp: { fontSize: 10, textAlign: 'right' },
+  clientTimestamp: { color: 'rgba(255,255,255,0.75)' },
+  providerTimestamp: { color: '#64748B' },
   roundCounterContainer: { alignItems: 'center', marginBottom: 32 },
   roundCounter: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7ED', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   roundCounterText: { color: '#F97316', fontSize: 12, fontWeight: '700', marginLeft: 6 },

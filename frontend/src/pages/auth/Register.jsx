@@ -64,6 +64,29 @@ const RegisterScreen = ({ navigation }) => {
   const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
   const CLOUDINARY_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
 
+  const getPasswordStrength = (value) => {
+    const checks = [
+      value.length >= 8,
+      /[A-Z]/.test(value),
+      /[0-9]/.test(value),
+      /[^A-Za-z0-9]/.test(value),
+    ];
+    const score = checks.filter(Boolean).length;
+
+    if (!value) {
+      return { label: "Entrez un mot de passe", color: "#94A3B8", score: 0 };
+    }
+    if (score <= 1) {
+      return { label: "Faible", color: "#EF4444", score: 1 };
+    }
+    if (score <= 3) {
+      return { label: "Moyen", color: "#F97316", score: 2 };
+    }
+    return { label: "Fort", color: "#10B981", score: 3 };
+  };
+
+  const passwordStrength = getPasswordStrength(password);
+
   const validateForm = () => {
     if (!fullName.trim()) {
       Alert.alert("Erreur", "Veuillez entrer votre nom complet");
@@ -530,6 +553,27 @@ const RegisterScreen = ({ navigation }) => {
                   />
                 </TouchableOpacity>
               </View>
+              <View style={styles.passwordStrengthContainer}>
+                <View style={styles.passwordStrengthBars}>
+                  {[1, 2, 3].map((level) => (
+                    <View
+                      key={level}
+                      style={[
+                        styles.passwordStrengthBar,
+                        level <= passwordStrength.score && {
+                          backgroundColor: passwordStrength.color,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.passwordStrengthText, { color: passwordStrength.color }]}>
+                  {passwordStrength.label}
+                </Text>
+              </View>
+              <Text style={styles.passwordHint}>
+                Utilisez 8 caracteres avec majuscule, chiffre et symbole.
+              </Text>
             </View>
 
             <View style={styles.inputContainer}>
@@ -767,6 +811,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: "#191C23",
+  },
+  passwordStrengthContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  passwordStrengthBars: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    marginRight: 12,
+  },
+  passwordStrengthBar: {
+    flex: 1,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "#E2E8F0",
+  },
+  passwordStrengthText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  passwordHint: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#64748B",
+    lineHeight: 18,
   },
   registerButton: {
     height: 56,

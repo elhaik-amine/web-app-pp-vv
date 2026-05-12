@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
   ScrollView, Image, Platform, ActivityIndicator, Alert,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CLOUDINARY_URL = process.env.EXPO_PUBLIC_CLOUDINARY_URL;
@@ -220,7 +220,7 @@ const BookingStep4Screen = ({ navigation, route }) => {
       Alert.alert(
         '✅ Réservation envoyée',
         `Votre demande a été envoyée au prestataire avec ${photosSaved} photo(s). Il pourra accepter ou négocier le prix.`,
-        [{ text: 'OK', onPress: () => navigation.replace('BookingDetail', { bookingId }) }],
+        [{ text: 'OK', onPress: () => navigation.replace('ClientTabs', { screen: 'HomeClient' }) }],
       );
     } catch (error) {
       console.log('Booking error:', {

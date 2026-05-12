@@ -124,7 +124,7 @@ const BookingStep3Screen = ({ navigation, route }) => {
       Alert.alert('Erreur', 'Veuillez sélectionner un créneau horaire');
       return;
     }
-    
+
     const dateDayOfWeek = toDayOfWeek(selectedDate);
     if (!availableDays.includes(dateDayOfWeek)) {
       Alert.alert('Date indisponible', 'Ce prestataire n’est pas disponible ce jour.');
@@ -225,13 +225,14 @@ const BookingStep3Screen = ({ navigation, route }) => {
               renderItem={({ item }) => {
                 const isSelected = selectedSlot?.id === item.id;
                 const isAvailableSlot = availableSlotsForDate.includes(item.time);
+                const isDisabledSlot = !isAvailableSlot;
 
                 return (
                   <TouchableOpacity
                     style={[
                       styles.slotCard,
                       isSelected && styles.slotCardActive,
-                      !isAvailableSlot && styles.slotCardBooked,
+                      isDisabledSlot && styles.slotCardBooked,
                     ]}
                     onPress={() => {
                       if (!isAvailableSlot) {
@@ -240,21 +241,21 @@ const BookingStep3Screen = ({ navigation, route }) => {
                       }
                       setSelectedSlot(item);
                     }}
-                    disabled={!isAvailableSlot}
+                    disabled={isDisabledSlot}
                   >
                     <Text style={[
                       styles.slotTime,
                       isSelected && styles.slotTextActive,
-                      !isAvailableSlot && styles.slotTextBooked,
+                      isDisabledSlot && styles.slotTextBooked,
                     ]}>
                       {item.time}
                     </Text>
                     <Text style={[
                       styles.slotPeriod,
                       isSelected && styles.slotTextActive,
-                      !isAvailableSlot && styles.slotTextBooked,
+                      isDisabledSlot && styles.slotTextBooked,
                     ]}>
-                      {!isAvailableSlot ? '🔒 Indisponible' : item.period}
+                      {isDisabledSlot ? '🔒 Indisponible' : item.period}
                     </Text>
                     {isSelected && (
                       <View style={styles.slotCheck}>
