@@ -140,7 +140,7 @@ const TokenWalletScreen = ({ navigation }) => {
         return;
       }
 
-      const { client_secret } = data.data;
+      const { client_secret, payment_intent_id } = data.data;
 
       // Step 2: Initialize Stripe Payment Sheet
       const { error: initError } = await initPaymentSheet({
@@ -165,7 +165,6 @@ const TokenWalletScreen = ({ navigation }) => {
       const { error: presentError } = await presentPaymentSheet();
 
       if (presentError) {
-        // User cancelled or payment failed
         if (presentError.code === 'Canceled') {
           Alert.alert('Annulé', 'Paiement annulé');
         } else {
@@ -175,10 +174,27 @@ const TokenWalletScreen = ({ navigation }) => {
         return;
       }
 
-      // Step 4: Payment successful
+      // Step 4: Payment successful — confirm with backend to credit tokens
+      const confirmResponse = await fetch(`${API_URL}/tokens/confirm-payment`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ payment_intent_id }),
+      });
+
+      const confirmData = await confirmResponse.json();
+
+      if (!confirmData.success) {
+        Alert.alert('Erreur', confirmData.message || 'Erreur lors du crédit des tokens. Contactez le support.');
+        setPurchasing(false);
+        return;
+      }
+
       Alert.alert(
         'Succès ! 🎉',
-        `${selectedPackage.amount} tokens achetés avec succès !`,
+        `${selectedPackage.amount} tokens achetés et crédités sur votre compte !`,
         [
           {
             text: 'OK',

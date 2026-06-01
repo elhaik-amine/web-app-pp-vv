@@ -30,6 +30,7 @@ const QRScannerScreen = ({ navigation, route }) => {
   const [verifying, setVerifying] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [scanStatus, setScanStatus] = useState('initialisez'); // 'initialisez' | 'pret' | 'detecte' | 'verification' | 'erreur'
   
   const { bookingId } = route.params || {};
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -83,6 +84,7 @@ const QRScannerScreen = ({ navigation, route }) => {
     }
 
     setVerifying(true);
+    setScanStatus('verification');
     try {
       const token = await AsyncStorage.getItem('khidmati_token');
       
@@ -117,11 +119,13 @@ const QRScannerScreen = ({ navigation, route }) => {
       } else {
         Alert.alert('❌ Erreur', result.message || 'QR code invalide');
         setScanned(false);
+        setScanStatus('erreur');
       }
     } catch (error) {
       // console.log('Error:', error);
       Alert.alert('Erreur', 'Impossible de vérifier le code');
       setScanned(false);
+      setScanStatus('erreur');
     } finally {
       setVerifying(false);
       isProcessing.current = false;
@@ -129,9 +133,10 @@ const QRScannerScreen = ({ navigation, route }) => {
   };
 
   const handleBarCodeScanned = ({ type, data }) => {
-    if (isProcessing.current) return; // synchronous guard — fires before state update
+    if (isProcessing.current) return;
     isProcessing.current = true;
     setScanned(true);
+    setScanStatus('detecte');
     verifyQRCode(data);
   };
 
@@ -216,8 +221,10 @@ const QRScannerScreen = ({ navigation, route }) => {
         style={StyleSheet.absoluteFillObject}
         facing="back"
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        onCameraReady={() => setScanStatus('pret')}
+        barcodeScannerEnabled={true}
         barcodeScannerSettings={{
-          barcodeTypes: ['qr', 'org.iso.QRCode'],
+          barcodeTypes: ['qr'],
         }}
       />
       
@@ -243,6 +250,17 @@ const QRScannerScreen = ({ navigation, route }) => {
       </View>
 
       <Text style={styles.instructionText}>Placez le QR code dans le cadre</Text>
+
+      <View style={styles.statusRow}>
+        <View style={[styles.statusDot, { backgroundColor: scanStatus === 'pret' || scanStatus === 'detecte' ? '#10B981' : '#F59E0B' }]} />
+        <Text style={styles.statusText}>
+          {scanStatus === 'initialisez' && 'Initialisation...'}
+          {scanStatus === 'pret' && 'Scanner prêt'}
+          {scanStatus === 'detecte' && 'QR détecté ! Vérification...'}
+          {scanStatus === 'verification' && 'Vérification...'}
+          {scanStatus === 'erreur' && 'Erreur de scan'}
+        </Text>
+      </View>
 
       <View style={styles.infoCard}>
         <View style={styles.missionLabelContainer}>
@@ -277,6 +295,15 @@ const QRScannerScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Manual Entry Button */}
+      <TouchableOpacity 
+        style={styles.manualEntryButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <Ionicons name="keypad-outline" size={20} color="#1A73E8" />
+        <Text style={styles.manualEntryButtonText}>Saisir le code manuellement</Text>
+      </TouchableOpacity>
 
       {/* Manual Code Modal */}
       <Modal
@@ -355,8 +382,11 @@ const styles = StyleSheet.create({
   topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
   bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
   bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
-  instructionText: { color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginBottom: 20, fontSize: 14 },
-  infoCard: { backgroundColor: '#FFF', borderRadius: 24, margin: 20, padding: 20, marginBottom: 30 },
+  instructionText: { color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginBottom: 12, fontSize: 14 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, gap: 8 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '600' },
+  infoCard: { backgroundColor: '#FFF', borderRadius: 24, margin: 20, padding: 20, marginBottom: 8 },
   missionLabelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 8 },
   missionLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', letterSpacing: 1 },
@@ -378,6 +408,8 @@ const styles = StyleSheet.create({
   refreshButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
   contentLayer: { flex: 1, backgroundColor: '#F8FAFC' },
   // Modal Styles
+  manualEntryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF', marginHorizontal: 20, marginBottom: 80, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#1A73E8', gap: 8 },
+  manualEntryButtonText: { fontSize: 16, fontWeight: '700', color: '#1A73E8' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '85%', backgroundColor: '#FFF', borderRadius: 24, padding: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

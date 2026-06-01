@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, ScrollView, ActivityIndicator, Alert,
-  Share,
+  Share, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -183,9 +183,10 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
               <View style={styles.qrContainer}>
                 <QRCode
                   value={booking.qr_code}
-                  size={220}
-                  bgColor="#000000"
-                  fgColor="#FFFFFF"
+                  size={260}
+                  bgColor="#FFFFFF"
+                  fgColor="#000000"
+                  quietZone={20}
                 />
               </View>
               <Text style={styles.activeText}>✅ QR actif - Montrez au prestataire</Text>
@@ -193,6 +194,8 @@ const QRCodeDisplayScreen = ({ navigation, route }) => {
                 <Ionicons name="share-outline" size={20} color="#1A73E8" />
                 <Text style={styles.shareButtonText}>Partager le QR code</Text>
               </TouchableOpacity>
+              <Text style={styles.rawCodeLabel}>Code :</Text>
+              <Text style={styles.rawCodeText} selectable>{booking.qr_code}</Text>
             </>
           ) : (
             <>
@@ -268,6 +271,8 @@ const styles = StyleSheet.create({
   activeText: { fontSize: 14, color: '#10B981', fontWeight: '600', marginBottom: 16 },
   shareButton: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#F0F7FF', borderRadius: 20 },
   shareButtonText: { fontSize: 14, fontWeight: '600', color: '#1A73E8', marginLeft: 8 },
+  rawCodeLabel: { fontSize: 12, color: '#94A3B8', marginTop: 16, marginBottom: 4 },
+  rawCodeText: { fontSize: 11, color: '#475569', textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', paddingHorizontal: 8 },
   qrPlaceholder: { width: 220, height: 220, backgroundColor: '#F1F5F9', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   waitingText: { fontSize: 16, fontWeight: '600', color: '#F97316', marginBottom: 8 },
   countdownContainer: { alignItems: 'center', marginTop: 8 },
